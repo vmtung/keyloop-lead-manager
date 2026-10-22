@@ -41,7 +41,7 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
 
 - **Ask:** Write assumptions, acceptance criteria and the API contract, plus ADRs for the key
   decisions. Treat `specs/` as the source of truth from here on.
-- **AI output:** 17 assumptions, 34 acceptance criteria with IDs that tests will reference, the
+- **AI output:** 17 assumptions, 35 acceptance criteria with IDs that tests will reference, the
   contract as Zod schemas in `src/contract.ts` with an endpoint spec, and four ADRs (stack, SSE,
   mock server, optimistic logging with client-generated IDs).
 - **Product calls the AI made, flagged for my review:** a 15-minute first-response target; status
