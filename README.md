@@ -5,7 +5,7 @@ Demand domain). Work in progress.
 
 ## Requirements
 
-- Node 22.13 or newer (see `.nvmrc`)
+- Node 24 (see `.nvmrc`)
 - pnpm 11
 
 ## Build, run, test

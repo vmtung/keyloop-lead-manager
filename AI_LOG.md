@@ -51,4 +51,8 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   whitespace-only summary, unknown event type) before relying on them.
 - **Found:** the latest React Router (8) also needs Node ≥ 22.22, the same constraint that hit jsdom.
   Recorded in ADR-001.
-- **Decision:** _pending my review._
+- **Decision:** ✅ Approved all five product calls. Upgraded to Node 24 LTS instead of pinning
+  around old Node: jsdom is back on 30 (reversing the pin from entry 2), React Router 8 is
+  available, and the mock server can run TypeScript without an experimental flag.
+- **Why:** Two libraries hitting the same limit was a sign the runtime was the problem, not the
+  libraries. Pinning would have kept costing us at every new dependency.

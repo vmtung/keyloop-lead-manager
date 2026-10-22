@@ -25,7 +25,7 @@ Key decisions are recorded in [`docs/adr/`](docs/adr/). Do not contradict an ADR
 
 ## Stack
 
-- TypeScript (strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), Node 22, pnpm
+- TypeScript (strict, `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`), Node 24 LTS, pnpm
 - React 19 + Vite, React Router, TanStack Query, Zod, plain CSS with design tokens
 - Vitest + React Testing Library for unit and integration tests; Playwright for one end-to-end path
 - oxlint for linting

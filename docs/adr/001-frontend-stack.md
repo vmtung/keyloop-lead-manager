@@ -28,5 +28,6 @@ widely used tools beat novel ones.
 - Easier: optimistic updates, cache invalidation from live events, one source of truth for types.
 - Harder: TanStack Query's cache is a second place state lives; tests need a fresh `QueryClient`
   each time to stay isolated.
-- Constraint found while choosing versions: the latest React Router (8) and jsdom (30) need
-  Node 22.22 or newer. On Node 22.13 we use React Router 7 and jsdom 29. Upgrading Node lifts both.
+- Runtime: Node 24 LTS. The latest React Router (8) and jsdom (30) need Node 22.22 or newer, and
+  the mock server relies on Node running TypeScript without a flag (ADR-003). The project started
+  on Node 22.13; we upgraded rather than pin older versions of both libraries.
