@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { formatDuration } from './format'
+import { formatDuration } from './format.ts'
 
 const s = 1000
 const min = 60 * s

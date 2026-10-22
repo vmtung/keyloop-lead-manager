@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
-import type { Activity, ActivityType, IsoDateTime, Lead } from '../contract'
-import { firstResponseAt, isContactAttempt, sortForInbox, speedToLead } from './speedToLead'
+import type { Activity, ActivityType, IsoDateTime, Lead } from '../contract.ts'
+import { firstResponseAt, isContactAttempt, sortForInbox, speedToLead } from './speedToLead.ts'
 
 const RECEIVED = '2026-10-22T09:00:00.000Z'
 const minutes = (n: number) => n * 60_000

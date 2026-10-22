@@ -1,6 +1,6 @@
 // Speed-to-lead rules (specs/assumptions.md A6, A8–A10). Pure functions: the caller passes `now`.
 // The mock server reuses isContactAttempt and firstResponseAt, so the rule lives in one place.
-import type { Activity, ActivityType, IsoDateTime, Lead } from '../contract'
+import type { Activity, ActivityType, IsoDateTime, Lead } from '../contract.ts'
 
 const MINUTE = 60_000
 
