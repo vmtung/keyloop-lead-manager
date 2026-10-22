@@ -1,0 +1,121 @@
+// The app's only door to the backend: every response is parsed against the contract here, so code
+// past this file can trust its types (AC-7.1). Failures become one typed ApiError.
+import type { z } from 'zod'
+import {
+  type ApiErrorCode,
+  ApiErrorResponse,
+  CreateActivityResponse,
+  LeadDetailResponse,
+  type LeadId,
+  LeadListResponse,
+  type NewActivity,
+  type UserId,
+  UserListResponse,
+} from '../contract.ts'
+import { log } from '../observability/log.ts'
+
+export type ApiFailure =
+  | { kind: 'network' }
+  | { kind: 'timeout' }
+  | { kind: 'http'; status: number; code: ApiErrorCode | null; message: string }
+  | { kind: 'invalid_response'; message: string }
+
+export class ApiError extends Error {
+  readonly failure: ApiFailure
+  readonly requestId: string
+
+  constructor(failure: ApiFailure, requestId: string) {
+    super(`API request failed: ${failure.kind}`)
+    this.name = 'ApiError'
+    this.failure = failure
+    this.requestId = requestId
+  }
+}
+
+interface ApiOptions {
+  fetch: typeof fetch
+  baseUrl: string
+  timeoutMs: number
+}
+
+interface RequestOptions {
+  method?: 'GET' | 'POST'
+  body?: unknown
+  userId?: UserId
+  signal?: AbortSignal | undefined
+}
+
+export function createApi({ fetch, baseUrl, timeoutMs }: ApiOptions) {
+  async function request<S extends z.ZodType>(
+    path: string,
+    schema: S,
+    { method = 'GET', body, userId, signal }: RequestOptions = {},
+  ): Promise<z.output<S>> {
+    const requestId = crypto.randomUUID()
+    const headers = new Headers({ 'x-request-id': requestId })
+    if (body !== undefined) headers.set('content-type', 'application/json')
+    if (userId !== undefined) headers.set('x-user-id', userId)
+
+    const timeout = AbortSignal.timeout(timeoutMs)
+    const fail = (failure: ApiFailure): never => {
+      log.error('api.request_failed', { requestId, method, path, ...failure })
+      throw new ApiError(failure, requestId)
+    }
+
+    let response: Response
+    try {
+      response = await fetch(`${baseUrl}${path}`, {
+        method,
+        headers,
+        body: body === undefined ? null : JSON.stringify(body),
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+      })
+    } catch (error) {
+      // The caller cancelled (e.g. the user navigated away): not a failure, let it propagate.
+      if (signal?.aborted) throw error
+      return fail(timeout.aborted ? { kind: 'timeout' } : { kind: 'network' })
+    }
+
+    const payload = await readJson(response)
+
+    if (!response.ok) {
+      const parsed = ApiErrorResponse.safeParse(payload)
+      return fail({
+        kind: 'http',
+        status: response.status,
+        code: parsed.success ? parsed.data.error.code : null,
+        message: parsed.success ? parsed.data.error.message : response.statusText,
+      })
+    }
+
+    const parsed = schema.safeParse(payload)
+    if (!parsed.success) {
+      return fail({ kind: 'invalid_response', message: parsed.error.message })
+    }
+    return parsed.data
+  }
+
+  return {
+    listUsers: (signal?: AbortSignal) => request('/users', UserListResponse, { signal }),
+    listLeads: (signal?: AbortSignal) => request('/leads', LeadListResponse, { signal }),
+    getLead: (id: LeadId, signal?: AbortSignal) =>
+      request(`/leads/${id}`, LeadDetailResponse, { signal }),
+    createActivity: (leadId: LeadId, activity: NewActivity, userId: UserId) =>
+      request(`/leads/${leadId}/activities`, CreateActivityResponse, {
+        method: 'POST',
+        body: activity,
+        userId,
+      }),
+  }
+}
+
+export type Api = ReturnType<typeof createApi>
+
+/** A body that isn't JSON is `undefined`; schema parsing then reports it. */
+async function readJson(response: Response): Promise<unknown> {
+  try {
+    return await response.json()
+  } catch {
+    return undefined
+  }
+}
