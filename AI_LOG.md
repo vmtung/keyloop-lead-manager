@@ -36,3 +36,19 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   added to prove the linter actually scans `src/`. It flagged both problems; the file was removed.
 - **Why it matters:** Both guards looked done after the edit. Only running the failure case showed
   one of them was not.
+
+## 3. Stage 1: specs, contract and ADRs
+
+- **Ask:** Write assumptions, acceptance criteria and the API contract, plus ADRs for the key
+  decisions. Treat `specs/` as the source of truth from here on.
+- **AI output:** 17 assumptions, 34 acceptance criteria with IDs that tests will reference, the
+  contract as Zod schemas in `src/contract.ts` with an endpoint spec, and four ADRs (stack, SSE,
+  mock server, optimistic logging with client-generated IDs).
+- **Product calls the AI made, flagged for my review:** a 15-minute first-response target; status
+  derived from the activity log instead of stored; an unanswered call counts as a response; every
+  activity needs a summary; the log reads oldest first.
+- **Verified:** ran valid and malformed payloads through the schemas (bad date, unknown enum,
+  whitespace-only summary, unknown event type) before relying on them.
+- **Found:** the latest React Router (8) also needs Node ≥ 22.22, the same constraint that hit jsdom.
+  Recorded in ADR-001.
+- **Decision:** _pending my review._
