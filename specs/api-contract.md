@@ -62,4 +62,5 @@ Set through env vars when starting the mock server. They apply to every `/api` r
 |---|---|---|
 | `MOCK_LATENCY_MS` | `150-600` | Random delay per request, as `min-max` or a single number |
 | `MOCK_FAILURE_RATE` | `0` | Share of requests (0–1) that return 500 `internal` |
+| `MOCK_API_PORT` | `8787` | Port the mock API listens on (Vite proxies `/api` to it) |
 | `MOCK_DATA_FILE` | `server/data/db.json` | Where data is stored; deleted to reset to seed data |

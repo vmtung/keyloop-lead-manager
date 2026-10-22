@@ -46,13 +46,23 @@ Key decisions are recorded in [`docs/adr/`](docs/adr/). Do not contradict an ADR
    output. For UI work, check it in a browser too.
 8. **Log notable collaboration** in [`AI_LOG.md`](AI_LOG.md): ask → AI output → decision → why.
 
+## Conventions
+
+- Relative imports use explicit `.ts` / `.tsx` extensions. Node runs `server/` by stripping types,
+  and it resolves only what is written.
+- Business rules are pure functions in `src/domain/`; the mock server imports them rather than
+  restating them.
+- Every response is parsed in `src/api/client.ts`; nothing else validates API data.
+
 ## Commands
 
 ```bash
-pnpm install     # install deps (engineStrict: fails on a Node version mismatch)
-pnpm dev         # run the app
-pnpm lint        # oxlint, warnings fail
-pnpm typecheck   # tsc -b
-pnpm test        # vitest run
-pnpm build       # typecheck + production build
+pnpm install        # install deps (engineStrict: fails on a Node version mismatch)
+pnpm dev            # app on :5173 and mock API on :8787
+pnpm lint           # oxlint, warnings fail
+pnpm typecheck      # tsc -b (app, server, tests)
+pnpm test           # vitest run
+pnpm build          # typecheck + production build
+pnpm simulate:lead  # post a website enquiry to the running mock API
+pnpm reset-data     # delete the mock API's data file (stop the server first)
 ```

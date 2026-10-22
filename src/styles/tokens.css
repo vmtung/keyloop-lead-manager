@@ -1,0 +1,36 @@
+/* Achromatic ledger (design-taste-frontend app style). The chrome is ink; the one hue (--data)
+   marks the speed-to-lead meter; amber and red appear only on at-risk and overdue leads. */
+:root {
+  --ground: #f2f4f7; /* blue-grey: a meter's ground, the screen's face */
+  --surface: #ffffff;
+  --raised: #f6f7f9;
+  --active: #e9ebee;
+  --border: #e3e5e8;
+  --rule: #eff0f2;
+  --control: #d4d6da;
+
+  --text: #0a0a0a;
+  --muted: #5f6368;
+  --primary: #141414;
+  --data: #1d5fbf;
+
+  --positive: #247b50;
+  --negative: #c4242a;
+  --warning: #92400e;
+  --pill-neutral-bg: #eceef1; --pill-neutral-ink: #3d3d3d;
+  --pill-warning-bg: #fff4d6; --pill-warning-ink: #7a3410;
+  --pill-negative-bg: #ffedea; --pill-negative-ink: #831c1e;
+
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --gap: 12px;
+  --pad: 24px;
+  --control-height: 36px;
+  --topbar: 48px;
+
+  --font: 'Geist Variable', system-ui, sans-serif;
+  --fs-title: 24px;
+  --fs-section: 16px;
+  --fs-body: 14px;
+  --fs-small: 12px;
+}

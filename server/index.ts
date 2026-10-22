@@ -5,7 +5,7 @@ import { parseFaults } from './config.ts'
 import { seed } from './seed.ts'
 import { openStore } from './store.ts'
 
-const port = Number(process.env.PORT ?? '8787')
+const port = Number(process.env.MOCK_API_PORT ?? '8787')
 const file = process.env.MOCK_DATA_FILE ?? 'server/data/db.json'
 const faults = parseFaults(process.env)
 const log = (entry: Record<string, unknown>) =>

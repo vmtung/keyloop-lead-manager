@@ -25,3 +25,4 @@ dist-ssr
 
 # Mock server data
 server/data/
+.taste-skill/

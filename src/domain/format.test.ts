@@ -1,5 +1,19 @@
 import { expect, test } from 'vitest'
-import { formatDuration } from './format.ts'
+import { formatDuration, formatPrice, formatWhen } from './format.ts'
+
+test('formatPrice rounds pence to whole pounds with separators', () => {
+  expect(formatPrice(3149500)).toBe('£31,495')
+  expect(formatPrice(0)).toBe('£0')
+})
+
+test.each([
+  ['2026-10-22T09:15:00', 'Today 09:15'],
+  ['2026-10-21T17:40:00', 'Yesterday 17:40'],
+  ['2026-10-20T11:02:00', '20 Oct 11:02'],
+])('formatWhen(%s) → %s', (when, expected) => {
+  const now = new Date('2026-10-22T14:00:00').getTime()
+  expect(formatWhen(new Date(when).toISOString(), now)).toBe(expected)
+})
 
 const s = 1000
 const min = 60 * s

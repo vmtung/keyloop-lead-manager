@@ -1,9 +1,0 @@
-/* Design tokens and base styles land in Stage 2. */
-:root {
-  color-scheme: light dark;
-  font-family: system-ui, sans-serif;
-}
-
-body {
-  margin: 0;
-}

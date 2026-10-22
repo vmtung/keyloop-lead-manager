@@ -56,3 +56,30 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   available, and the mock server can run TypeScript without an experimental flag.
 - **Why:** Two libraries hitting the same limit was a sign the runtime was the problem, not the
   libraries. Pinning would have kept costing us at every new dependency.
+
+## 4. Stage 2: the core build
+
+- **Ask:** Build MUST 1–4 and 6: inbox, detail, activity logging with optimistic rollback,
+  speed-to-lead logic, mock server with fault injection, keyboard and accessibility.
+- **AI output:** Domain rules as pure functions, a Hono mock server, an API client that parses every
+  response, and the React UI in the "achromatic ledger" style dealt by the design skill (ink chrome,
+  colour only on the SLA signal). Integration tests run the real mock server in-process instead of
+  hand-written fetch stubs, so they exercise the actual contract.
+- **My decisions:** lucide-react for icons and self-hosted Geist (no Google Fonts request), after
+  the AI listed the options with trade-offs.
+- **Caught by running it, not by reading it:**
+  - The preview tool sets `PORT=5173`; the mock server read the generic `PORT` and took Vite's port.
+    Renamed to `MOCK_API_PORT` and made Vite's port strict, so a clash fails loudly.
+  - Testing Library wasn't cleaning up between tests, because Vitest runs without globals.
+  - With failures on, Retry left the restored text in the composer, inviting a double submit. Retry
+    now clears it.
+  - On a phone the h1 disappeared with the hidden inbox, and the details card pushed the composer
+    off screen. The open lead now owns the h1, and phone and email moved to the header.
+- **Caught in review of the AI's own work:** a composer closure that could never see text typed after
+  submitting (replaced with a ref), and a placeholder test for AC-1.4 that asserted nothing. Both
+  rewritten; the failure-path test now drives a real 500 and a real Retry.
+- **Verified:** 89 tests; mutation checks on the SLA boundaries and on Retry reusing the activity ID
+  (each broken on purpose, each caught). In the browser with `MOCK_FAILURE_RATE=0.5`: four injected
+  500s, then a 201, one activity stored, and client and server logs matched by request ID.
+- **Kept against a design-lint finding:** `example.com` emails. RFC 2606 reserves the domain so
+  fictional data can never reach a real inbox.
