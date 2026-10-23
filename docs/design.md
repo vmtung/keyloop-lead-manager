@@ -268,8 +268,8 @@ activity then produces one trace across both services (AC-7.7):
 - The server records spans through the OpenTelemetry API only, which does nothing until traced
   mode registers the SDK. Tests and `pnpm dev` run the same code and record nothing.
 - In the browser, tracing loads behind a build-time flag. The normal build contains no
-  OpenTelemetry code (about 133.8 KB gzipped against 133.75 KB before; the difference is the
-  `withSpan` hook). The traced build adds a separate 23 KB chunk.
+  OpenTelemetry code: adding tracing grew it by about 0.03 KB gzipped, the `withSpan` hook. The
+  traced build adds a separate 23 KB chunk.
 - Browser spans go to Jaeger through Vite's `/otlp` proxy, so there is no CORS to configure.
 - The API client looks up `window.fetch` on every call. It used to bind it once at startup, which
   kept the unpatched `fetch` and left the server spans in separate traces. Running a real trace
