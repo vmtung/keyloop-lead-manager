@@ -62,6 +62,7 @@ pnpm dev            # app on :5173 and mock API on :8787
 pnpm lint           # oxlint, warnings fail
 pnpm typecheck      # tsc -b (app, server, tests)
 pnpm test           # vitest run
+pnpm test:e2e       # Playwright in installed Chrome, on its own ports and data
 pnpm build          # typecheck + production build
 pnpm simulate:lead  # post a website enquiry to the running mock API
 pnpm reset-data     # delete the mock API's data file (stop the server first)

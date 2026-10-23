@@ -155,3 +155,17 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
 - **Process note:** several bugs this stage passed one kind of check and failed another (unit test
   vs browser, keyboard vs visual, local vs CI). Checking the same thing from two angles was what
   caught them.
+
+## 8. Stage 6: documentation
+
+- **Ask:** The design doc (diagram, components, data flow, technology choices, observability, how
+  GenAI helped) and the README (build, run, test, AI Collaboration Narrative), with no AI-sounding
+  prose.
+- **AI output:** `docs/design.md` with five Mermaid diagrams, and the README in my voice.
+- **Checked before committing:** the AI fact-checked its own draft against the repo and corrected
+  the test counts by level, which it had first got wrong. It removed sentences that overclaimed on
+  my behalf ("I watched…", "I can explain every file") and a timeline mention I had asked to keep
+  out. It rendered every diagram in headless Chrome: one failed to parse, because Mermaid reads
+  `;` as a statement separator in sequence messages.
+- **Decision:** the narrative claims only what the log shows. Lines that are mine to say in the
+  interview stay out of the README.
