@@ -37,7 +37,7 @@ test('a website lead arrives live, is followed up, and the follow-up survives a 
   await page.goto(leadUrl)
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
   await expect(entry).toContainText('by Anna Clarke')
-  await expect(page.getByText(/Responded in/)).toBeVisible()
+  await expect(page.getByRole('article').getByText(/Responded in/)).toBeVisible()
   await expect(
     page.getByRole('region', { name: /^Contacted/ }).getByRole('link', { name: new RegExp(name) }),
   ).toBeVisible()
