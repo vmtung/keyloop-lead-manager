@@ -224,3 +224,27 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
     latency, now its own span so the trace explains itself.
 - **Verified:** read the trace back from Jaeger's API (browser span, its POST, the server request,
   latency, write, emit), and screenshotted Jaeger's view for the docs.
+
+## 12. Test audit
+
+- **Ask:** Audit the tests themselves.
+- **AI output:** a traceability map of all 47 criteria to the tests that cite them, then a code
+  review of the test files. Ten findings; all fixed:
+  - A blanket `console.error` silencer could hide a React crash inside a passing test. Replaced with
+    a guard in the test setup that fails any test on unexpected console output, allowing only the
+    app's own JSON log lines. Proved by planting a stray `console.error`: the test failed.
+  - Missing tests for three things that had been verified only by hand: resubmitting restored text
+    reuses the failed ID, the API client uses the `fetch` that traced mode patches later, and the
+    page-lifecycle wiring (logs flushed on hide, unload flag, global error handlers). The wiring was
+    extracted from `setup.ts` so it could be tested. Each new test was checked by breaking the code.
+  - Flakiness and weak assertions: sample data was timed from module load, an absence was checked
+    after a fixed 50 ms sleep, a server test checked `length > 0`, and AC-2.3 tested the clock but
+    not the label it drives.
+- **Found a real defect through a test that couldn't fail:** the first version of the AC-1.3
+  check measured CLS, and it passed even with a planted 300 px jump. Measuring showed why: the
+  header is a small part of the viewport, so that jump scored 0.016 against a 0.1 threshold.
+  Rewriting it to compare where the skeleton and the real list start exposed a real 24 px jump: the
+  line under the title appeared only once data arrived. Fixed by reserving its line. It can still
+  wrap to two lines at tablet width.
+- **Why it matters:** a test is only evidence if it fails when the code is wrong. Every new test in
+  this pass was shown to fail first.

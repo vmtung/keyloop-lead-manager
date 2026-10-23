@@ -131,7 +131,7 @@ textarea { caret-color: var(--data); }
 }
 .inbox__header { padding: 24px 20px 12px; }
 .inbox__title { font-size: var(--fs-title); line-height: 32px; font-weight: 600; letter-spacing: -0.01em; }
-.inbox__finding { margin-top: 4px; color: var(--muted); }
+.inbox__finding { min-height: 20px; margin-top: 4px; color: var(--muted); }
 
 .inbox__group + .inbox__group { margin-top: 12px; }
 .inbox__group-title {

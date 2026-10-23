@@ -42,3 +42,23 @@ test('a website lead arrives live, is followed up, and the follow-up survives a 
     page.getByRole('region', { name: /^Contacted/ }).getByRole('link', { name: new RegExp(name) }),
   ).toBeVisible()
 })
+
+test('AC-1.3: the list does not jump when the leads replace the loading skeleton', async ({ page }) => {
+  // Hold the lead list back so the skeleton is really on screen before the data lands.
+  await page.route('**/api/leads', async (route) => {
+    await new Promise((r) => setTimeout(r, 800))
+    await route.continue()
+  })
+  await page.goto('/leads')
+  const skeleton = page.getByLabel('Loading leads')
+  await expect(skeleton).toBeVisible()
+  const before = (await skeleton.boundingBox())!.y
+
+  const list = page.locator('[data-lead-list]')
+  await expect(list).toBeVisible()
+  const after = (await list.boundingBox())!.y
+
+  // Compared directly: CLS was too coarse here. A 300 px jump of the inbox header scored 0.016,
+  // far under the 0.1 "good" threshold, because the header is a small part of the viewport.
+  expect(after).toBe(before)
+})

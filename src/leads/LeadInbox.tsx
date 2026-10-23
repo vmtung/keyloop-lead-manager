@@ -20,7 +20,8 @@ export function LeadInbox({ selectedId }: { selectedId: LeadId | undefined }) {
     <section className="inbox" aria-labelledby="inbox-title">
       <header className="inbox__header">
         <Title id="inbox-title" className="inbox__title">Leads</Title>
-        {leads.data && <p className="inbox__finding">{finding(leads.data, now)}</p>}
+        {/* Always rendered, so its line is reserved while loading and the list doesn't jump (AC-1.3). */}
+        <p className="inbox__finding">{leads.data && finding(leads.data, now)}</p>
       </header>
 
       {leads.isPending && <InboxSkeleton />}

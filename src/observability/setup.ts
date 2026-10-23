@@ -29,34 +29,14 @@ export function startObservability() {
     onSendFailed: (reason) => console.warn('Client logs could not be sent; batch dropped.', reason),
   })
 
-  // The last batch goes out as the tab is hidden or closed.
-  addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushNow()
+  installPageLifecycle(window, {
+    isHidden: () => document.visibilityState === 'hidden',
+    flush: flushLogs,
+    setUnloading: (value) => {
+      unloading = value
+    },
   })
-  addEventListener('pagehide', (event) => {
-    // A page kept in the back/forward cache can come back; only a real unload stays unloading.
-    unloading = !event.persisted
-    flushNow()
-  })
-  addEventListener('pageshow', () => {
-    unloading = false
-  })
-
-  addEventListener('error', (event) => {
-    log.error('ui.unhandled_error', {
-      message: event.message,
-      source: event.filename,
-      line: event.lineno,
-      stack: event.error instanceof Error ? event.error.stack : undefined,
-    })
-  })
-  addEventListener('unhandledrejection', (event) => {
-    const reason: unknown = event.reason
-    log.error('ui.unhandled_rejection', {
-      message: reason instanceof Error ? reason.message : String(reason),
-      stack: reason instanceof Error ? reason.stack : undefined,
-    })
-  })
+  installErrorHandlers(window, log.error)
 
   // AC-7.5. INP and CLS report when the page is hidden, which is why the beacon flush matters.
   const report = (metric: Metric) =>
@@ -75,6 +55,41 @@ export function startObservability() {
   onTTFB(report)
 }
 
-function flushNow() {
-  flushLogs({ beacon: true })
+interface Lifecycle {
+  isHidden: () => boolean
+  flush: (how: { beacon: boolean }) => void
+  setUnloading: (unloading: boolean) => void
+}
+
+/** The last batch of logs goes out with a beacon as the tab is hidden or closed (AC-7.6). */
+export function installPageLifecycle(target: EventTarget, { isHidden, flush, setUnloading }: Lifecycle) {
+  target.addEventListener('visibilitychange', () => {
+    if (isHidden()) flush({ beacon: true })
+  })
+  target.addEventListener('pagehide', (event) => {
+    // A page kept in the back/forward cache can come back; only a real unload stays unloading.
+    setUnloading(!(event as PageTransitionEvent).persisted)
+    flush({ beacon: true })
+  })
+  target.addEventListener('pageshow', () => setUnloading(false))
+}
+
+/** Errors nothing else caught: uncaught exceptions and unhandled promise rejections. */
+export function installErrorHandlers(target: EventTarget, logError: (event: string, fields: Record<string, unknown>) => void) {
+  target.addEventListener('error', (e) => {
+    const event = e as ErrorEvent
+    logError('ui.unhandled_error', {
+      message: event.message,
+      source: event.filename,
+      line: event.lineno,
+      stack: event.error instanceof Error ? event.error.stack : undefined,
+    })
+  })
+  target.addEventListener('unhandledrejection', (e) => {
+    const reason: unknown = (e as PromiseRejectionEvent).reason
+    logError('ui.unhandled_rejection', {
+      message: reason instanceof Error ? reason.message : String(reason),
+      stack: reason instanceof Error ? reason.stack : undefined,
+    })
+  })
 }

@@ -1,16 +1,11 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { claimLead } from '../server/store.ts'
 import type { IsoDateTime, LeadId, UserId } from './contract.ts'
 import { LEADS, renderApp } from './test/renderApp.tsx'
 
-afterEach(() => {
-  vi.restoreAllMocks()
-})
 
-// The API client logs failures as structured errors; tests that cause them keep the output quiet.
-const quietErrors = () => vi.spyOn(console, 'error').mockImplementation(() => {})
 
 const region = (name: string) => screen.getByRole('region', { name: new RegExp(`^${name}`) })
 const rowNames = (container: HTMLElement) =>
@@ -44,7 +39,6 @@ describe('inbox', () => {
   })
 
   test('AC-1.4: a failed load shows an error, and Retry refetches', async () => {
-    quietErrors()
     const { network } = await renderApp({
       network: (n) => (n.failing = (url) => url.endsWith('/api/leads')),
     })
@@ -88,7 +82,6 @@ describe('lead detail', () => {
   test.each(['00000000-0000-4000-8000-0000000000ff', 'not-a-lead-id'])(
     'AC-3.5: unknown lead %s shows "Lead not found"',
     async (id) => {
-      quietErrors()
       await renderApp({ route: `/leads/${id}` })
       expect(await screen.findByRole('heading', { level: 1, name: 'Lead not found' })).toBeInTheDocument()
       expect(screen.getByRole('link', { name: 'Back to the inbox' })).toHaveAttribute('href', '/leads')
@@ -96,7 +89,6 @@ describe('lead detail', () => {
   )
 
   test('AC-3.6: a failed detail load shows Retry, and the inbox stays usable', async () => {
-    quietErrors()
     await renderApp({
       route: `/leads/${LEADS.aishaContacted}`,
       network: (n) => (n.failing = (url) => url.includes(`/leads/${LEADS.aishaContacted}`)),
@@ -122,7 +114,7 @@ describe('logging an activity', () => {
     expect(submit).toBeEnabled()
   })
 
-  test('AC-4.2, AC-4.3, AC-4.5: shows as saving at once, then saved; the lead becomes contacted', async () => {
+  test('AC-4.2, AC-4.3, AC-4.5, AC-6.4: shows as saving at once, then saved; the lead becomes contacted', async () => {
     const { input, network } = await openComposer()
     await userEvent.click(screen.getByRole('radio', { name: 'Call' }))
     await userEvent.type(input, 'Called, left voicemail')
@@ -144,8 +136,7 @@ describe('logging an activity', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Call logged.')
   })
 
-  test('AC-4.4: a failed save removes the entry, restores the text, and Retry reuses the ID', async () => {
-    quietErrors()
+  test('AC-4.4, AC-6.4: a failed save removes the entry, restores the text, and Retry reuses the ID', async () => {
     const { input, network, store } = await openComposer()
     await userEvent.click(screen.getByRole('radio', { name: 'Email' }))
     await userEvent.type(input, 'Emailed brochure')
@@ -171,7 +162,6 @@ describe('logging an activity', () => {
   })
 
   test('AC-4.8: a save that fails after moving to another lead is not lost', async () => {
-    quietErrors()
     const { input, network } = await openComposer(LEADS.hannahOverdue38min)
     await userEvent.type(input, 'Called from the forecourt')
     network.hold((_, init) => isPost(init))
@@ -205,8 +195,26 @@ describe('logging an activity', () => {
     expect(screen.queryByText('Not saved')).not.toBeInTheDocument()
   })
 
+  test('AC-4.4: resubmitting the restored text with Log activity also reuses the failed ID', async () => {
+    const { input, network, store } = await openComposer()
+    await userEvent.type(input, 'Texted the brochure link')
+
+    network.failing = (_, init) => isPost(init)
+    await userEvent.click(screen.getByRole('button', { name: 'Log activity' }))
+    await screen.findByRole('alert')
+    expect(input).toHaveValue('Texted the brochure link')
+
+    // Not Retry: the salesperson just presses Log activity again on the restored text.
+    network.failing = null
+    await userEvent.click(screen.getByRole('button', { name: 'Log activity' }))
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Call logged.'))
+
+    const [first, second] = postBodies(network.requests)
+    expect(second?.id).toBe(first?.id)
+    expect(store.read().activities.filter((a) => a.summary === 'Texted the brochure link')).toHaveLength(1)
+  })
+
   test('a failure does not overwrite text typed after submitting', async () => {
-    quietErrors()
     const { input, network } = await openComposer()
     await userEvent.type(input, 'First')
     network.hold()
@@ -248,7 +256,7 @@ describe('live updates', () => {
     vehicle: null,
   }
 
-  test('AC-5.1: a new lead appears without a reload, highlighted and announced', async () => {
+  test('AC-5.1, AC-6.4: a new lead appears without a reload, highlighted and announced', async () => {
     const { postLead } = await renderApp()
     await screen.findByText('Hannah Okafor')
     expect(await screen.findByText('Live')).toBeInTheDocument()
@@ -281,17 +289,19 @@ describe('live updates', () => {
     await waitFor(() => expect(rowNames(region('Contacted'))).toContain('Olivia Bennett'))
   })
 
-  test('AC-5.3: a dropped connection says so, and on reconnect refetches what was missed', async () => {
-    const { live, postLead } = await renderApp()
+  test('AC-5.3, AC-6.4: a dropped connection says so, and on reconnect refetches what was missed', async () => {
+    const { live, postLead, network } = await renderApp()
     await screen.findByText('Hannah Okafor')
     await screen.findByText('Live')
 
     act(() => live.drop())
+    const requestsAtDrop = network.requests.length
     expect(screen.getByText('Reconnecting…')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Live updates paused. Reconnecting.')
 
-    await postLead(ELLIE) // emitted while we're disconnected: this event is lost
-    await new Promise((r) => setTimeout(r, 50))
+    // Created while we're disconnected: its event is lost, so nothing refetches and it can't appear.
+    expect((await postLead(ELLIE)).status).toBe(201)
+    expect(network.requests.slice(requestsAtDrop).filter((r) => r.url.endsWith('/api/leads'))).toEqual([])
     expect(screen.queryByText('Ellie Turner')).not.toBeInTheDocument()
 
     await act(async () => {
@@ -321,7 +331,6 @@ describe('claiming a lead', () => {
   })
 
   test('AC-8.2: losing the race shows who won, without a reload', async () => {
-    quietErrors()
     const { store } = await renderApp({ route: `/leads/${OLIVIA}` })
     await screen.findByText('Unclaimed')
 

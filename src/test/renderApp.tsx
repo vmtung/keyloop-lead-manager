@@ -15,8 +15,6 @@ import type { EventSourceLike } from '../api/events.ts'
 import { AnnouncerProvider, ApiProvider, CurrentUserProvider, NowProvider } from '../app/context.tsx'
 import { LiveUpdatesProvider } from '../leads/live.tsx'
 
-export const NOW = new Date()
-
 interface Options {
   route?: string
   data?: (seeded: Data) => Data
@@ -50,7 +48,8 @@ export class Network {
 
 export async function renderApp({ route = '/leads', data = (d) => d, network: setup }: Options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'lead-ui-'))
-  const store = await openStore(join(dir, 'db.json'), () => data(seed(NOW)))
+  // Seeded relative to this render, so "Overdue · 38 min" stays 38 however long the run has taken.
+  const store = await openStore(join(dir, 'db.json'), () => data(seed(new Date())))
   const server = createApp({
     store,
     faults: { latencyMs: { min: 0, max: 0 }, failureRate: 0 },

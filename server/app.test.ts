@@ -65,7 +65,11 @@ describe('reading leads', () => {
     const { app } = await setup()
     const res = await app.request('/api/leads')
     expect(res.status).toBe(200)
-    expect(LeadListResponse.parse(await res.json()).leads.length).toBeGreaterThan(0)
+    const { leads } = LeadListResponse.parse(await res.json())
+    expect(leads.map((l) => l.customer.name).sort()).toEqual(
+      seed(NOW).leads.map((l) => l.customer.name).sort(),
+    )
+    expect(new Set(leads.map((l) => l.id)).size).toBe(leads.length) // no duplicates
   })
 
   test('GET /api/leads/:id returns activities oldest first', async () => {

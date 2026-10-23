@@ -88,16 +88,17 @@ Jaeger with `pnpm traces:down`. Normal mode needs no Docker and sends no traces.
 pnpm test
 ```
 
-145 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+153 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
 pnpm test:e2e
 ```
 
-One Playwright journey in your installed Chrome, through the real proxy and event stream: a lead
-arrives live, a call is logged, and it survives a reload. It starts its own servers on ports 5183
-and 8797 with fresh data, so it can run alongside `pnpm dev`.
+Two Playwright tests in your installed Chrome, through the real proxy and event stream: a lead
+arrives live, a call is logged, and it survives a reload; and the list doesn't move when the data
+replaces the loading skeleton. They start their own servers on ports 5183 and 8797 with fresh data,
+so they can run alongside `pnpm dev`.
 
 ```bash
 pnpm lint
@@ -181,5 +182,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-145 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+153 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

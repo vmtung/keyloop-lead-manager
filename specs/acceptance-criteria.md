@@ -11,7 +11,7 @@ AI_LOG).
 |---|---|---|
 | AC-1.1 | `/leads` lists every lead with customer name, enquiry type, vehicle of interest (if any), time since received, and status. | integration |
 | AC-1.2 | Leads awaiting response come first, longest-waiting first. Contacted leads follow, newest first. | unit |
-| AC-1.3 | While loading, a skeleton list shows; no layout shift when data arrives. | integration |
+| AC-1.3 | While loading, a skeleton list shows; no layout shift when data arrives. | integration (skeleton), e2e (layout shift) |
 | AC-1.4 | If loading fails, an error message and a **Retry** button show; Retry refetches. | integration |
 | AC-1.5 | With no leads, an empty state says so. | integration |
 

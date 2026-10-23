@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
+import { browserFetch } from './api/browserFetch.ts'
 import { createApi } from './api/client.ts'
 import { isRetryable } from './api/describeFailure.ts'
 import App from './App.tsx'
@@ -22,9 +23,7 @@ if (import.meta.env.VITE_TRACING === 'true') {
 }
 
 const api = createApi({
-  // Looked up per call, not bound once: traced mode patches window.fetch after this runs, and a
-  // bound copy would keep the unpatched one (no fetch spans, no traceparent).
-  fetch: (input, init) => window.fetch(input, init),
+  fetch: browserFetch,
   baseUrl: '/api',
   timeoutMs: 10_000,
   isUnloading: isPageUnloading,
