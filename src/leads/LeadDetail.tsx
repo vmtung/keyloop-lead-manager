@@ -47,7 +47,7 @@ export function LeadDetail({ leadId }: { leadId: LeadId }) {
 
   const { lead, activities } = query.data
   return (
-    <article className="detail" aria-labelledby="lead-name">
+    <article id="lead-detail" tabIndex={-1} className="detail" aria-labelledby="lead-name">
       <BackLink />
       <header className="detail__header">
         <h1 id="lead-name">{lead.customer.name}</h1>
@@ -82,7 +82,7 @@ function LeadFacts({ lead, now }: { lead: Lead; now: number }) {
         <dt>Received</dt>
         <dd className="num">{formatWhen(lead.receivedAt, now)}</dd>
       </dl>
-      <h3 className="facts__title">Vehicle of interest</h3>
+      <h2 className="facts__title">Vehicle of interest</h2>
       {vehicle ? (
         <dl>
           <dt>Vehicle</dt>

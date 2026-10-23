@@ -112,6 +112,16 @@ textarea { caret-color: var(--data); }
   flex: 1; min-height: 0;
 }
 
+/* Hidden until focused, then shown over the inbox's top-left corner. */
+.skip-link {
+  position: absolute; z-index: 1; left: 12px; top: calc(var(--topbar) + 8px);
+  padding: 8px 12px; border-radius: var(--radius-control);
+  background: var(--primary); color: #fff; font-weight: 500; text-decoration: none;
+  transform: translateY(-200%);
+}
+.skip-link:focus { transform: none; }
+#lead-detail:focus { outline: none; }
+
 /* Inbox ----------------------------------------------------------------------------------------- */
 
 .inbox {
@@ -280,7 +290,14 @@ textarea { caret-color: var(--data); }
 /* Phone: one region at a time (the URL decides which). */
 @media (max-width: 767px) {
   .topbar { padding: 0 16px; }
-  .brand__scope, .user-switcher .meta { display: none; }
+  .brand__scope { display: none; }
+  /* Hidden visually, not removed: it is the picker's accessible name. */
+  .user-switcher .meta {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  /* Thumb-sized targets on a phone (44px). */
+  .brand { min-height: 44px; }
+  .user-switcher select, .button--primary, .button--secondary { height: 44px; }
   .workspace { grid-template-columns: minmax(0, 1fr); }
   .workspace[data-view='list'] .detail { display: none; }
   .workspace[data-view='detail'] .inbox { display: none; }
@@ -292,5 +309,5 @@ textarea { caret-color: var(--data); }
   .contact a { min-height: 44px; }
   .composer__hint { visibility: hidden; }
   .segmented { display: grid; grid-template-columns: repeat(5, auto); align-self: stretch; }
-  .segmented__option span { padding: 6px 4px; text-align: center; }
+  .segmented__option span { padding: 12px 4px; text-align: center; }
 }

@@ -48,6 +48,12 @@ function LeadsScreen() {
 
   return (
     <main className="workspace" data-view={param === undefined ? 'list' : 'detail'}>
+      {leadId && (
+        // The inbox can be hundreds of rows long; keyboard users can jump past it.
+        <a href="#lead-detail" className="skip-link">
+          Skip to lead details
+        </a>
+      )}
       <LeadInbox selectedId={leadId} />
       {param === undefined ? (
         <section className="detail detail--empty">
