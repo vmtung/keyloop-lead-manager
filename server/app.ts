@@ -102,12 +102,13 @@ export function createApp(deps: AppDeps) {
         void stream.writeSSE({ data: JSON.stringify(event) })
       }
       listeners.add(listener)
-      // Send bytes at once: proxies (Vite's in dev, nginx in production) hold the response, and
-      // with it the browser's `open` event, until the first body chunk arrives.
-      await stream.write(': connected\n\n')
+      // Registered before the first await: a client that drops during it must still be removed.
       stream.onAbort(() => {
         listeners.delete(listener)
       })
+      // Send bytes at once: proxies (Vite's in dev, nginx in production) hold the response, and
+      // with it the browser's `open` event, until the first body chunk arrives.
+      await stream.write(': connected\n\n')
       while (!stream.aborted) {
         await stream.sleep(deps.keepAliveMs ?? 15_000)
         // A named event, not a comment: browsers hide comments from scripts, and the client's

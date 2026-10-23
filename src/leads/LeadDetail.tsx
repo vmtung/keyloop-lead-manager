@@ -64,7 +64,7 @@ export function LeadDetail({ leadId }: { leadId: LeadId }) {
       <div className="detail__body">
         <section className="detail__log" aria-label="Follow-ups">
           <ActivityLog lead={lead} activities={activities} pending={pending} now={now} />
-          <ActivityComposer key={leadId} leadId={leadId} />
+          <ActivityComposer leadId={leadId} />
         </section>
         <LeadFacts lead={lead} now={now} />
       </div>

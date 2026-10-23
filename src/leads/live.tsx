@@ -38,15 +38,18 @@ export function LiveUpdatesProvider({
   const previous = useRef<LiveStatus>('connecting')
 
   useEffect(() => {
+    const freshTimers = new Set<ReturnType<typeof setTimeout>>()
     function markFresh(id: LeadId) {
       setFresh((s) => new Set(s).add(id))
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        freshTimers.delete(timer)
         setFresh((s) => {
           const next = new Set(s)
           next.delete(id)
           return next
         })
       }, FRESH_MS)
+      freshTimers.add(timer)
     }
 
     async function onEvent(event: ServerEvent) {
@@ -75,7 +78,7 @@ export function LiveUpdatesProvider({
       }
     }
 
-    return subscribeToEvents('/api/events', {
+    const unsubscribe = subscribeToEvents('/api/events', {
       create: createSource,
       schedule: (fn, ms) => setTimeout(fn, ms),
       cancel: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
@@ -93,6 +96,10 @@ export function LiveUpdatesProvider({
         announce('Live updates resumed.')
       },
     })
+    return () => {
+      unsubscribe()
+      freshTimers.forEach(clearTimeout)
+    }
   }, [queryClient, announce, createSource])
 
   return <LiveContext value={{ status, fresh }}>{children}</LiveContext>

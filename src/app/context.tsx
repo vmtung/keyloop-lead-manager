@@ -101,7 +101,8 @@ export const useCurrentUser = () => required(use(CurrentUserContext), 'useCurren
 function readStoredUserId(): string | null {
   try {
     return localStorage.getItem(USER_KEY)
-  } catch {
+  } catch (error) {
+    log.warn('storage.read_failed', { key: USER_KEY, message: String(error) })
     return null
   }
 }
@@ -109,7 +110,8 @@ function readStoredUserId(): string | null {
 function writeStoredUserId(id: string) {
   try {
     localStorage.setItem(USER_KEY, id)
-  } catch {
+  } catch (error) {
     // Same fallback as reading: the choice lasts until reload.
+    log.warn('storage.write_failed', { key: USER_KEY, message: String(error) })
   }
 }

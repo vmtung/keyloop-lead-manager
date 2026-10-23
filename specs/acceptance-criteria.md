@@ -47,6 +47,7 @@ AI_LOG).
 | AC-4.5 | The first contact attempt on a lead awaiting response changes it to contacted, in the detail view and in the inbox, without a reload. | integration |
 | AC-4.6 | Logged activities persist across a reload and a server restart. | e2e |
 | AC-4.7 | Sending the same activity ID twice stores one activity. | unit (server) |
+| AC-4.8 | If a save fails after the salesperson has moved to another lead, the failure is still announced, the lead shows "Not saved" in the inbox, and opening it again restores the text with Retry. | integration |
 
 ## 5. Real-time
 

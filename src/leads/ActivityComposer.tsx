@@ -3,15 +3,10 @@ import { describeFailure } from '../api/describeFailure.ts'
 import { useAnnounce, useCurrentUser } from '../app/context.tsx'
 import { type ActivityId, ActivityType, type LeadId, type NewActivity } from '../contract.ts'
 import { ACTIVITY_LABEL } from '../domain/labels.ts'
-import { useLogActivity } from './queries.ts'
+import { useFailedActivity, useLogActivity } from './queries.ts'
 
 export const COMPOSER_ID = 'activity-summary'
 const MAX = 2000
-
-interface Failed {
-  activity: NewActivity
-  message: string
-}
 
 /**
  * Logs a follow-up optimistically (AC-4.1–4.4). A failed activity keeps its ID, so Retry, or
@@ -21,35 +16,39 @@ export function ActivityComposer({ leadId }: { leadId: LeadId }) {
   const { user, status: userStatus } = useCurrentUser()
   const announce = useAnnounce()
   const logActivity = useLogActivity(leadId)
-  const [type, setType] = useState<ActivityType>('call')
-  const [summary, setSummaryState] = useState('')
+  // Kept in the mutation cache, so a failure that happened while this lead was closed shows here.
+  const failedEntry = useFailedActivity(leadId)
+  const failed = failedEntry && {
+    activity: failedEntry.input.activity,
+    message: describeFailure(failedEntry.error),
+  }
+  const [type, setType] = useState<ActivityType>(failed?.activity.type ?? 'call')
+  const [summary, setSummaryState] = useState(failed?.activity.summary ?? '')
   // Mirrors `summary` for the async onError, which runs after the user may have typed again.
-  const summaryRef = useRef('')
+  const summaryRef = useRef(summary)
   const setSummary = (value: string) => {
     summaryRef.current = value
     setSummaryState(value)
   }
-  const [failed, setFailed] = useState<Failed | null>(null)
 
   const trimmed = summary.trim()
   const canSubmit = trimmed.length > 0 && trimmed.length <= MAX && user !== undefined
 
   function send(activity: NewActivity) {
     if (!user) return
-    setFailed(null)
+    failedEntry?.dismiss()
     logActivity.mutate(
       { activity, author: user },
       {
+        // Per-call callbacks run only while this composer is mounted; the failure itself is
+        // announced and kept by the mutation (queries.ts) either way.
         onSuccess: () => announce(`${ACTIVITY_LABEL[activity.type]} logged.`),
-        onError: (error) => {
-          const message = describeFailure(error)
-          setFailed({ activity, message })
+        onError: () => {
           // Put the text back unless the user has started typing something else.
           if (summaryRef.current === '') {
             setSummary(activity.summary)
             setType(activity.type)
           }
-          announce(`Activity not saved. ${message}`)
         },
       },
     )

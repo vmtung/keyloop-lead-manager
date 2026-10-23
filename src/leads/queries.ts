@@ -1,8 +1,9 @@
 // Server state for leads. Optimistic logging follows ADR-004: the pending activity is rendered from
 // the mutation's own variables, so a failure needs no cache rollback, only the entry disappearing.
-import { useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query'
+import { type Mutation, useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { z } from 'zod'
-import { useApi } from '../app/context.tsx'
+import { describeFailure } from '../api/describeFailure.ts'
+import { useAnnounce, useApi } from '../app/context.tsx'
 import type { LeadDetailResponse, LeadId, LeadListResponse, NewActivity, User } from '../contract.ts'
 
 export const leadKeys = {
@@ -38,10 +39,25 @@ export interface LogActivityInput {
 export function useLogActivity(leadId: LeadId) {
   const api = useApi()
   const queryClient = useQueryClient()
+  const announce = useAnnounce()
   return useMutation({
     mutationKey: logActivityKey(leadId),
     mutationFn: ({ activity, author }: LogActivityInput) =>
       api.createActivity(leadId, activity, author.id),
+    // A failed activity stays in the mutation cache until it is retried or replaced, so it survives
+    // the composer unmounting (the salesperson moved on) and is offered again on return.
+    gcTime: Infinity,
+    // ...which would also keep every success, so each new save clears this lead's earlier ones.
+    onMutate: () => {
+      const cache = queryClient.getMutationCache()
+      cache.findAll({ mutationKey: logActivityKey(leadId), status: 'success' }).forEach((m) => cache.remove(m))
+    },
+    // Mutation-level, so it runs even if the composer that started the save is gone.
+    onError: (error) => {
+      const detail = queryClient.getQueryData<z.output<typeof LeadDetailResponse>>(leadKeys.detail(leadId))
+      const name = detail?.lead.customer.name ?? 'this lead'
+      announce(`Activity for ${name} not saved. ${describeFailure(error)}`)
+    },
     onSuccess: ({ activity, lead }) => {
       // The server's lead carries firstResponseAt, so status changes in both views (AC-4.5).
       queryClient.setQueryData<z.output<typeof LeadDetailResponse>>(leadKeys.detail(leadId), (old) =>
@@ -65,4 +81,38 @@ export function usePendingActivities(leadId: LeadId): LogActivityInput[] {
     filters: { mutationKey: logActivityKey(leadId), status: 'pending' },
     select: (mutation) => mutation.state.variables as LogActivityInput,
   })
+}
+
+export interface FailedActivity {
+  input: LogActivityInput
+  error: unknown
+  /** Forget the failure, e.g. because it is being retried or replaced. */
+  dismiss: () => void
+}
+
+type LogMutation = Mutation<unknown, unknown, LogActivityInput>
+
+/** The most recent unsaved activity for this lead, if any (AC-4.4). */
+export function useFailedActivity(leadId: LeadId): FailedActivity | undefined {
+  const queryClient = useQueryClient()
+  const failed = useMutationState({
+    filters: { mutationKey: logActivityKey(leadId), status: 'error' },
+    select: (mutation) => mutation as LogMutation,
+  })
+  const latest = failed.at(-1)
+  if (!latest) return undefined
+  return {
+    input: latest.state.variables!,
+    error: latest.state.error,
+    dismiss: () => failed.forEach((m) => queryClient.getMutationCache().remove(m)),
+  }
+}
+
+/** Leads with an activity that failed to save, so the inbox can flag them. */
+export function useUnsavedLeadIds(): ReadonlySet<LeadId> {
+  const ids = useMutationState({
+    filters: { mutationKey: ['logActivity'], status: 'error' },
+    select: (mutation) => mutation.options.mutationKey?.[1] as LeadId,
+  })
+  return new Set(ids)
 }

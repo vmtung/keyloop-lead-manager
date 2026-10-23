@@ -155,7 +155,7 @@ describe('logging an activity', () => {
     expect(alert).toHaveTextContent('Not saved. The server had a problem.')
     expect(input).toHaveValue('Emailed brochure')
     expect(screen.queryByText('Saving…')).not.toBeInTheDocument()
-    expect(screen.getByRole('status')).toHaveTextContent('Activity not saved.')
+    expect(screen.getByRole('status')).toHaveTextContent('Activity for Hannah Okafor not saved.')
 
     network.failing = null
     await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }))
@@ -166,6 +166,41 @@ describe('logging an activity', () => {
     expect(retry?.id).toBe(first?.id)
     expect(store.read().activities.filter((a) => a.summary === 'Emailed brochure')).toHaveLength(1)
     expect(input).toHaveValue('')
+  })
+
+  test('AC-4.8: a save that fails after moving to another lead is not lost', async () => {
+    quietErrors()
+    const { input, network } = await openComposer(LEADS.hannahOverdue38min)
+    await userEvent.type(input, 'Called from the forecourt')
+    network.hold((_, init) => isPost(init))
+    network.failing = (_, init) => isPost(init)
+    await userEvent.click(screen.getByRole('button', { name: 'Log activity' }))
+
+    // Move on to the next lead while the save is still in flight.
+    await userEvent.click(within(region('Awaiting response')).getByText('Marcus Reid'))
+    await screen.findByRole('heading', { level: 1, name: 'Marcus Reid' })
+    act(() => network.releaseAll())
+
+    // The failure is announced and marked on the lead in the inbox...
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('Activity for Hannah Okafor not saved.'),
+    )
+    const hannahRow = within(region('Awaiting response')).getByText('Hannah Okafor').closest('a')!
+    expect(hannahRow).toHaveTextContent('Not saved')
+
+    // ...and going back restores the text with Retry, which saves it.
+    network.failing = null
+    await userEvent.click(hannahRow)
+    const restored = await screen.findByLabelText('Summary')
+    expect(restored).toHaveValue('Called from the forecourt')
+    await userEvent.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Retry' }))
+    // The pending entry is replaced by the saved one, so wait for the saved one specifically.
+    await waitFor(() =>
+      expect(screen.getByText('Called from the forecourt').closest('li')).not.toHaveTextContent('Saving…'),
+    )
+    // The call made Hannah contacted, so her row is now in the other group, without the mark.
+    await waitFor(() => expect(rowNames(region('Contacted'))).toContain('Hannah Okafor'))
+    expect(screen.queryByText('Not saved')).not.toBeInTheDocument()
   })
 
   test('a failure does not overwrite text typed after submitting', async () => {

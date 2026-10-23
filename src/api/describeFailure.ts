@@ -13,7 +13,20 @@ export function describeFailure(error: unknown): string {
       return 'The server sent a response the app doesn’t understand.'
     case 'http':
       if (failure.status >= 500) return 'The server had a problem.'
-      return failure.message
+      // The server's own message is for logs; salespeople get one they can act on.
+      switch (failure.code) {
+        case 'not_found':
+          return 'This lead no longer exists.'
+        case 'unauthenticated':
+          return 'Your sign-in wasn’t recognised. Reload and choose your name.'
+        case 'idempotency_conflict':
+          return 'This activity clashes with one already saved. Reload to see the latest.'
+        case 'validation_failed':
+          return 'Some details were rejected. Check the summary and try again.'
+        case 'internal':
+        case null:
+          return `The request was refused (${failure.status}).`
+      }
   }
 }
 

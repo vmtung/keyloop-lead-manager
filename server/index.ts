@@ -8,8 +8,11 @@ import { openStore } from './store.ts'
 const port = Number(process.env.MOCK_API_PORT ?? '8787')
 const file = process.env.MOCK_DATA_FILE ?? 'server/data/db.json'
 const faults = parseFaults(process.env)
-const log = (entry: Record<string, unknown>) =>
-  console.log(JSON.stringify({ ts: new Date().toISOString(), ...entry }))
+const log = (entry: Record<string, unknown>) => {
+  const ts = new Date().toISOString()
+  // `ts` first for readability, and last in the assign so a client log field can't overwrite it.
+  console.log(JSON.stringify(Object.assign({ ts }, entry, { ts })))
+}
 
 const store = await openStore(file, () => seed())
 const app = createApp({ store, faults, log })

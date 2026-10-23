@@ -1,3 +1,4 @@
+import { CircleAlert } from 'lucide-react'
 import { Link } from 'react-router'
 import { describeFailure } from '../api/describeFailure.ts'
 import { useNow } from '../app/context.tsx'
@@ -5,8 +6,8 @@ import type { Lead, LeadId } from '../contract.ts'
 import { formatDuration, formatWhen } from '../domain/format.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
 import { SLA, sortForInbox, speedToLead } from '../domain/speedToLead.ts'
-import { useLeads } from './queries.ts'
 import { useLive } from './live.tsx'
+import { useLeads, useUnsavedLeadIds } from './queries.ts'
 import { SpeedToLeadPill } from './SpeedToLeadStatus.tsx'
 
 /** The page's h1 belongs to the main view: "Leads" here, the customer's name when a lead is open. */
@@ -44,20 +45,29 @@ export function LeadInbox({ selectedId }: { selectedId: LeadId | undefined }) {
   )
 }
 
+interface RowState {
+  selectedId: LeadId | undefined
+  now: number
+  /** Read once here and passed down, so a row re-renders only when its own lead changes state. */
+  fresh: ReadonlySet<LeadId>
+  unsaved: ReadonlySet<LeadId>
+}
+
 function LeadGroups({ leads, selectedId, now }: { leads: Lead[]; selectedId: LeadId | undefined; now: number }) {
+  const state: RowState = { selectedId, now, fresh: useLive().fresh, unsaved: useUnsavedLeadIds() }
   const awaiting = leads.filter((l) => l.firstResponseAt === null)
   const contacted = leads.filter((l) => l.firstResponseAt !== null)
   return (
     <div className="inbox__groups" data-lead-list>
-      <LeadGroup title="Awaiting response" leads={awaiting} selectedId={selectedId} now={now}
+      <LeadGroup title="Awaiting response" leads={awaiting} state={state}
         empty="Everyone has had a response." />
-      <LeadGroup title="Contacted" leads={contacted} selectedId={selectedId} now={now}
+      <LeadGroup title="Contacted" leads={contacted} state={state}
         empty="No contacted leads yet." />
     </div>
   )
 }
 
-function LeadGroup(props: { title: string; leads: Lead[]; selectedId: LeadId | undefined; now: number; empty: string }) {
+function LeadGroup(props: { title: string; leads: Lead[]; state: RowState; empty: string }) {
   const id = `group-${props.title.toLowerCase().replace(/\s+/g, '-')}`
   return (
     <section aria-labelledby={id} className="inbox__group">
@@ -70,7 +80,13 @@ function LeadGroup(props: { title: string; leads: Lead[]; selectedId: LeadId | u
         <ul className="lead-list">
           {props.leads.map((lead) => (
             <li key={lead.id}>
-              <LeadRow lead={lead} selected={lead.id === props.selectedId} now={props.now} />
+              <LeadRow
+                lead={lead}
+                now={props.state.now}
+                selected={lead.id === props.state.selectedId}
+                fresh={props.state.fresh.has(lead.id)}
+                unsaved={props.state.unsaved.has(lead.id)}
+              />
             </li>
           ))}
         </ul>
@@ -79,9 +95,9 @@ function LeadGroup(props: { title: string; leads: Lead[]; selectedId: LeadId | u
   )
 }
 
-function LeadRow({ lead, selected, now }: { lead: Lead; selected: boolean; now: number }) {
+function LeadRow(props: { lead: Lead; now: number; selected: boolean; fresh: boolean; unsaved: boolean }) {
+  const { lead, now, selected, fresh, unsaved } = props
   const awaiting = lead.firstResponseAt === null
-  const fresh = useLive().fresh.has(lead.id)
   const subject = lead.vehicle
     ? `${ENQUIRY_LABEL[lead.enquiryType]} · ${lead.vehicle.make} ${lead.vehicle.model}`
     : ENQUIRY_LABEL[lead.enquiryType]
@@ -96,7 +112,14 @@ function LeadRow({ lead, selected, now }: { lead: Lead; selected: boolean; now: 
       <span className="lead-row__when num">{formatWhen(lead.receivedAt, now)}</span>
       <span className="lead-row__subject">{subject}</span>
       <span className="lead-row__status">
-        <SpeedToLeadPill lead={lead} now={now} />
+        {/* One status mark per row: an unsaved activity outranks the SLA, it needs action now. */}
+        {unsaved ? (
+          <span className="pill pill--negative">
+            <CircleAlert aria-hidden size={12} /> Not saved
+          </span>
+        ) : (
+          <SpeedToLeadPill lead={lead} now={now} />
+        )}
       </span>
     </Link>
   )

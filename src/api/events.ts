@@ -29,7 +29,7 @@ const CLOSED = 2
 const BACKOFF_MS = [1000, 2000, 5000, 10_000]
 /**
  * The server pings every 15 s. A proxy or a mobile network can leave a dead connection looking open
- * with no error event, so silence for this long counts as a drop.
+ * with no error event, so silence for this long counts as a drop, from connecting onwards.
  */
 export const STALE_AFTER_MS = 35_000
 
@@ -60,6 +60,8 @@ export function subscribeToEvents(url: string, o: Options): () => void {
     }
 
     current.addEventListener('ping', heard)
+    // Also time out a connection that never opens (headers held by a proxy, a hung server).
+    heard()
 
     current.onerror = () => {
       o.cancel(watchdog)

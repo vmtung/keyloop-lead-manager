@@ -171,6 +171,18 @@ describe('subscribeToEvents', () => {
     expect(onResume).toHaveBeenCalledOnce()
   })
 
+  test('a connection that never opens times out and is retried', () => {
+    const { sources, statuses, watchdogs, timers } = setup()
+    expect(statuses).toEqual(['connecting'])
+    expect(watchdogs()).toHaveLength(1) // running before any open event
+
+    watchdogs()[0]!.fn()
+    expect(statuses.at(-1)).toBe('reconnecting')
+    expect(sources[0]!.closed).toBe(true)
+    timers.list[0]!.fn()
+    expect(sources).toHaveLength(2)
+  })
+
   test('unsubscribing closes the source and stops reconnecting', () => {
     const { latest, timers, unsubscribe, sources } = setup()
     latest().fail(FakeSource.CLOSED)

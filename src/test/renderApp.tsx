@@ -31,7 +31,11 @@ export class Network {
   failing: ((url: string, init?: RequestInit) => boolean) | null = null
   readonly requests: { url: string; init: RequestInit | undefined }[] = []
 
-  hold() {
+  private holding: (url: string, init?: RequestInit) => boolean = () => true
+
+  /** Holds matching requests (all by default) until releaseAll(). */
+  hold(which: (url: string, init?: RequestInit) => boolean = () => true) {
+    this.holding = which
     this.gate = new Promise((resolve) => (this.release = resolve))
   }
   releaseAll() {
@@ -40,7 +44,7 @@ export class Network {
   }
   async before(url: string, init?: RequestInit) {
     this.requests.push({ url, init })
-    if (this.gate) await this.gate
+    if (this.gate && this.holding(url, init)) await this.gate
   }
 }
 
