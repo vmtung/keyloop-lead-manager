@@ -288,3 +288,21 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   by disabling the server's drop: the test failed.
 - **Verified in the browser:** "Reconnecting…" 52 ms after a drop and "Live" again about 3 s
   later, instead of the 35-second watchdog wait. The video script's demo now uses the panel.
+
+## 15. Tracing switch in the demo tools
+
+- **Ask:** Jaeger showed no traces, because the app was started with `pnpm dev`, not
+  `pnpm dev:traced`. Keep tracing off by default, but let me switch it on from the cog.
+- **AI output:** spec first (AC-7.7 and two dev endpoints). The server holds the switch: the first
+  switch-on loads and registers the SDK, and a sampler checks the switch on every span, so off
+  means nothing is recorded. The browser loads its tracing chunk when the server says tracing is
+  on, and unregisters it when switched off. `dev:traced` and its build-time flag were removed, so
+  there is one way to turn tracing on.
+- **Failure made explicit:** switching on first sends Jaeger an empty batch. If Jaeger doesn't
+  answer, the endpoint returns 503, the panel says to run `pnpm traces:up`, and tracing stays off,
+  rather than collecting spans that can't be delivered.
+- **Verified:** tests for the switch, the endpoints and the panel, each shown to fail by breaking
+  the sampler and the browser's stop path. In the browser, switched on, logged a call, and read
+  one trace back from Jaeger's API with the browser's `activity.log` and POST and the server's
+  request, injected latency, write and emit. Switched off, a request produced no spans. The
+  production bundle still contains no OpenTelemetry or demo code.

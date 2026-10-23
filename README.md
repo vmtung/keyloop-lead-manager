@@ -72,18 +72,16 @@ pnpm reset-data
 
 The "Signed in as" menu picks the salesperson; there is no real login (assumption A2).
 
-To see one trace from a click through the server, start Jaeger in Docker and run in traced mode:
+To see one trace from a click through the server, start Jaeger in Docker:
 
 ```bash
 pnpm traces:up
 ```
 
-```bash
-pnpm dev:traced
-```
-
-Log a follow-up, then open Jaeger at http://localhost:16686 and pick `lead-manager-web`. Stop
-Jaeger with `pnpm traces:down`. Normal mode needs no Docker and sends no traces.
+Then, in the running app, open the demo tools (the cog, bottom right) and switch on **Send traces
+to Jaeger**. Log a follow-up, then follow **Open Jaeger** (http://localhost:16686, service
+`lead-manager-web`). Tracing is off until you switch it on, so the app needs no Docker otherwise.
+Stop Jaeger with `pnpm traces:down`.
 
 ## Test it
 
@@ -91,7 +89,7 @@ Jaeger with `pnpm traces:down`. Normal mode needs no Docker and sends no traces.
 pnpm test
 ```
 
-176 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+183 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
@@ -185,5 +183,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-176 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+183 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

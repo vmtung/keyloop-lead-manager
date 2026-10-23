@@ -254,10 +254,10 @@ mobile network can leave a connection half-open too.
   recovery screen shows the first characters of the session ID, so a salesperson can quote a
   reference that finds their logs.
 
-### Traces (traced mode)
+### Traces
 
-`pnpm traces:up` starts Jaeger 2.22 in Docker and `pnpm dev:traced` turns tracing on. Logging an
-activity then produces one trace across both services (AC-7.7):
+`pnpm traces:up` starts Jaeger 2.22 in Docker, and the demo tools switch tracing on and off while
+the app runs. Logging an activity then produces one trace across both services (AC-7.7):
 
 ![One trace in Jaeger: activity.log in the browser, its POST, and the server's handler with the injected latency, the file write and the event emit](screenshots/trace.jpg)
 
@@ -266,11 +266,15 @@ activity then produces one trace across both services (AC-7.7):
 - The server continues that trace: a span for the request, with children for the mock's injected
   latency, the store write and the event emit. Without its own span, the injected latency looked
   like slow handler code.
-- The server records spans through the OpenTelemetry API only, which does nothing until traced
-  mode registers the SDK. Tests and `pnpm dev` run the same code and record nothing.
-- In the browser, tracing loads behind a build-time flag. The normal build contains no
-  OpenTelemetry code: adding tracing grew it by about 0.03 KB gzipped, the `withSpan` hook. The
-  traced build adds a separate 23 KB chunk.
+- Tracing is off by default. The server holds the switch, so it survives a reload, and checks
+  that Jaeger answers before switching on; if it doesn't, the panel says to run `pnpm traces:up`.
+  The browser follows the server's switch.
+- The server records spans through the OpenTelemetry API only. The SDK loads the first time
+  tracing is switched on; switched off again, a sampler drops every span. Until then the same code
+  records nothing, in tests too.
+- In the browser, the tracing chunk (23 KB gzipped) loads the first time tracing is switched on,
+  and switching off unregisters it. It is reachable only from the demo tools, so the production
+  build contains no OpenTelemetry code: tracing grew it by about 0.03 KB, the `withSpan` hook.
 - Browser spans go to Jaeger through Vite's `/otlp` proxy, so there is no CORS to configure.
 - The API client looks up `window.fetch` on every call. It used to bind it once at startup, which
   kept the unpatched `fetch` and left the server spans in separate traces. Running a real trace
@@ -280,7 +284,7 @@ activity then produces one trace across both services (AC-7.7):
 
 | Signal | Plan |
 |---|---|
-| Traces | The traced mode above, with sampling, the OpenTelemetry collector in front of the vendor, and `traceparent` replacing `x-request-id` as the correlation key, so one trace runs from the click through the gateway to the database. |
+| Traces | The tracing above, always on with sampling, the OpenTelemetry collector in front of the vendor, and `traceparent` replacing `x-request-id` as the correlation key, so one trace runs from the click through the gateway to the database. |
 | Logs | The `/api/logs` intake becomes an OpenTelemetry collector or a vendor intake; the client code keeps its shape. Customer names, phone numbers and emails stay out of logs, as they do now. |
 | Business metrics | Share of leads answered within 15 minutes, median and 90th-percentile response time, overdue leads right now, per dealership and per salesperson. Speed to lead is the number the product exists to move, so it should be on a dashboard, not only in the UI. |
 | Real-user monitoring | Web Vitals by route and device, against Google's thresholds (LCP under 2.5 s, INP under 200 ms, CLS under 0.1). |

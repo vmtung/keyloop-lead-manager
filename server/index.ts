@@ -4,6 +4,7 @@ import { createApp } from './app.ts'
 import { parseFaults } from './config.ts'
 import { seed } from './seed.ts'
 import { openStore } from './store.ts'
+import { createTracingSwitch } from './tracing.ts'
 
 const port = Number(process.env.MOCK_API_PORT ?? '8787')
 const file = process.env.MOCK_DATA_FILE ?? 'server/data/db.json'
@@ -14,15 +15,11 @@ const log = (entry: Record<string, unknown>) => {
   console.log(JSON.stringify(Object.assign({ ts }, entry, { ts })))
 }
 
-if (process.env.OTEL_TRACING === 'true') {
-  const { startTracing } = await import('./tracing.ts')
-  const endpoint = process.env.OTEL_EXPORTER_URL ?? 'http://localhost:4318/v1/traces'
-  startTracing(endpoint)
-  log({ level: 'info', message: `Tracing to ${endpoint}` })
-}
+// Off until the demo tools switch it on (AC-7.7).
+const tracing = createTracingSwitch(process.env.OTEL_EXPORTER_URL ?? 'http://localhost:4318/v1/traces')
 
 const store = await openStore(file, () => seed())
-const app = createApp({ store, faults, log })
+const app = createApp({ store, faults, log, tracing })
 
 serve({ fetch: app.fetch, port }, () => {
   log({ level: 'info', message: `Mock API on http://localhost:${port}/api`, file, faults })

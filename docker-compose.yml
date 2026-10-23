@@ -1,4 +1,4 @@
-# Traced mode only (pnpm dev:traced). Jaeger receives OTLP traces on 4318; its UI is on 16686.
+# For tracing, switched on in the demo tools. Jaeger receives OTLP traces on 4318; its UI is on 16686.
 services:
   jaeger:
     image: jaegertracing/jaeger:2.22.0

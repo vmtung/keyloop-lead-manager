@@ -1,13 +1,17 @@
 // Demo tools: trigger the mock's simulations from the app instead of the command line. Development
 // builds only (main.tsx loads it behind import.meta.env.DEV), so production never ships it.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Hand, Phone, RotateCcw, Settings, Unplug, UserPlus } from 'lucide-react'
+import { ExternalLink, Hand, Phone, RotateCcw, Settings, Unplug, UserPlus } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
+import { ApiError } from '../api/client.ts'
 import { describeFailure } from '../api/describeFailure.ts'
 import { useAnnounce, useApi, useCurrentUser, useNow } from '../app/context.tsx'
 import type { ActivityId, DevFaults } from '../contract.ts'
 import { nextUp } from '../domain/inbox.ts'
 import { leadKeys, useLeads } from '../leads/queries.ts'
+import { syncBrowserTracing } from './browserTracing.ts'
+
+const JAEGER = 'http://localhost:16686/search?service=lead-manager-web'
 
 const MODES = {
   normal: { label: 'Normal', faults: { latencyMs: { min: 150, max: 600 }, failureRate: 0 } },
@@ -30,6 +34,9 @@ export default function DemoTools() {
   const { user, users } = useCurrentUser()
   const leads = useLeads()
   const faults = useQuery({ queryKey: ['dev', 'faults'], queryFn: () => api.dev.getFaults() })
+  // The server holds the switch, so it survives a reload; the browser follows it (AC-7.7).
+  const tracing = useQuery({ queryKey: ['dev', 'tracing'], queryFn: () => api.dev.getTracing() })
+  const tracingOn = tracing.data?.enabled ?? false
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
@@ -39,6 +46,8 @@ export default function DemoTools() {
   useEffect(() => {
     if (open) panel.current?.querySelector('button')?.focus()
   }, [open])
+
+  useEffect(() => syncBrowserTracing(tracingOn), [tracingOn])
 
   // Teammates are whoever isn't signed in here, so their actions arrive like another person's.
   const [caller, claimer] = users.filter((u) => u.id !== user?.id)
@@ -127,6 +136,32 @@ export default function DemoTools() {
               </label>
             ))}
           </fieldset>
+
+          <h3 className="demo__group">Tracing</h3>
+          <label className="demo__action">
+            <input type="checkbox" role="switch" checked={tracingOn} disabled={busy !== null || !tracing.data}
+              onChange={(event) => {
+                const enabled = event.target.checked
+                run('Switch tracing', async () => {
+                  try {
+                    await api.dev.setTracing({ enabled })
+                  } catch (error) {
+                    if (error instanceof ApiError && error.failure.kind === 'http' && error.failure.status === 503) {
+                      return 'Jaeger isn’t running. Start it with pnpm traces:up.'
+                    }
+                    throw error
+                  }
+                  await queryClient.invalidateQueries({ queryKey: ['dev', 'tracing'] })
+                  return enabled ? 'Tracing on. Log a follow-up, then find it in Jaeger.' : 'Tracing off.'
+                })
+              }} />
+            Send traces to Jaeger
+          </label>
+          {tracingOn && (
+            <a className="demo__action" href={JAEGER} target="_blank" rel="noreferrer">
+              <ExternalLink aria-hidden size={16} /> Open Jaeger
+            </a>
+          )}
 
           <h3 className="demo__group">Data</h3>
           <button type="button" className="demo__action" disabled={busy !== null}

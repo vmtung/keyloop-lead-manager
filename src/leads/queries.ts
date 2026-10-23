@@ -44,7 +44,7 @@ export function useLogActivity(leadId: LeadId) {
   const announce = useAnnounce()
   return useMutation({
     mutationKey: logActivityKey(leadId),
-    // In traced mode this span is the root of the trace: the click, then the request, then the
+    // While tracing is on, this span is the root of the trace: the click, then the request, then the
     // server's handler, write and emit (AC-7.7).
     mutationFn: ({ activity, author }: LogActivityInput) =>
       withSpan('activity.log', { 'lead.id': leadId, 'activity.type': activity.type }, () =>

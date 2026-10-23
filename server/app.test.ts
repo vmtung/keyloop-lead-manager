@@ -8,6 +8,7 @@ import {
   CreateActivityResponse,
   CreateLeadResponse,
   DevFaults,
+  DevTracing,
   DropStreamsResponse,
   LeadResponse,
   LeadDetailResponse,
@@ -18,6 +19,7 @@ import { createApp, type Faults } from './app.ts'
 import { parseFaults } from './config.ts'
 import { seed } from './seed.ts'
 import { openStore } from './store.ts'
+import { TracingUnavailable, type TracingSwitch } from './tracing.ts'
 
 const NOW = new Date('2026-10-22T09:00:00.000Z')
 const NO_FAULTS: Faults = { latencyMs: { min: 0, max: 0 }, failureRate: 0 }
@@ -36,7 +38,12 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-async function setup(faults: Faults = NO_FAULTS, random = () => 0.5, keepAliveMs = 60_000) {
+async function setup(
+  faults: Faults = NO_FAULTS,
+  random = () => 0.5,
+  keepAliveMs = 60_000,
+  tracing?: TracingSwitch,
+) {
   const store = await openStore(file, () => seed(NOW))
   const app = createApp({
     store,
@@ -45,6 +52,7 @@ async function setup(faults: Faults = NO_FAULTS, random = () => 0.5, keepAliveMs
     log: (entry) => logs.push(entry),
     now: () => NOW,
     keepAliveMs,
+    ...(tracing ? { tracing } : {}),
   })
   return { app, store }
 }
@@ -465,5 +473,43 @@ describe('dev endpoints (demo tools)', () => {
     const res = await app.request('/api/dev/drop-streams', json('POST'))
     expect(DropStreamsResponse.parse(await res.json()).dropped).toBe(1)
     expect((await reader.read()).done).toBe(true)
+  })
+
+  test('AC-7.7: tracing is off by default, and switches on and off at runtime', async () => {
+    let on = false
+    const { app } = await setup(NO_FAULTS, undefined, undefined, {
+      enabled: () => on,
+      set: async (next) => {
+        on = next
+      },
+    })
+    expect(DevTracing.parse(await (await app.request('/api/dev/tracing')).json())).toEqual({ enabled: false })
+
+    const res = await app.request('/api/dev/tracing', json('PUT', { enabled: true }))
+    expect(DevTracing.parse(await res.json())).toEqual({ enabled: true })
+    expect(on).toBe(true)
+
+    await app.request('/api/dev/tracing', json('PUT', { enabled: false }))
+    expect(on).toBe(false)
+  })
+
+  test('AC-7.7: switching tracing on with Jaeger down is a 503 that says so, and it stays off', async () => {
+    const { app } = await setup(NO_FAULTS, undefined, undefined, {
+      enabled: () => false,
+      set: async () => {
+        throw new TracingUnavailable('http://localhost:4318/v1/traces')
+      },
+    })
+    const res = await app.request('/api/dev/tracing', json('PUT', { enabled: true }))
+    expect(res.status).toBe(503)
+    const body = ApiErrorResponse.parse(await res.json())
+    expect(body.error.message).toMatch(/pnpm traces:up/)
+    expect(logs).toContainEqual(expect.objectContaining({ level: 'error', message: 'Tracing not switched on' }))
+    expect(DevTracing.parse(await (await app.request('/api/dev/tracing')).json())).toEqual({ enabled: false })
+  })
+
+  test('rejects an invalid tracing switch', async () => {
+    const { app } = await setup()
+    expect((await app.request('/api/dev/tracing', json('PUT', { enabled: 'yes' }))).status).toBe(400)
   })
 })

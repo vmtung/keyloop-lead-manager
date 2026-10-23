@@ -6,6 +6,7 @@ import {
   ApiErrorResponse,
   CreateLeadResponse,
   DevFaults,
+  DevTracing,
   DropStreamsResponse,
   CreateActivityResponse,
   LeadDetailResponse,
@@ -136,6 +137,8 @@ export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false
           dropStreams: () => request('/dev/drop-streams', DropStreamsResponse, { method: 'POST' }),
           getFaults: () => request('/dev/faults', DevFaults),
           setFaults: (faults: DevFaults) => request('/dev/faults', DevFaults, { method: 'PUT', body: faults }),
+          getTracing: () => request('/dev/tracing', DevTracing),
+          setTracing: (tracing: DevTracing) => request('/dev/tracing', DevTracing, { method: 'PUT', body: tracing }),
         }
       : undefined,
   }

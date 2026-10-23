@@ -10,6 +10,7 @@ import { MemoryRouter } from 'react-router'
 import { createApp } from '../../server/app.ts'
 import { seed } from '../../server/seed.ts'
 import { type Data, openStore } from '../../server/store.ts'
+import type { TracingSwitch } from '../../server/tracing.ts'
 import { createApi } from '../api/client.ts'
 import App from '../App.tsx'
 import type { EventSourceLike } from '../api/events.ts'
@@ -23,6 +24,8 @@ interface Options {
   data?: (seeded: Data) => Data
   /** Runs before the first render, e.g. to make the first requests fail. */
   network?: (network: Network) => void
+  /** The mock server's tracing switch; without one, tracing stays off. */
+  tracing?: TracingSwitch
 }
 
 /** Lets a test hold requests open or make them fail. */
@@ -49,7 +52,7 @@ export class Network {
   }
 }
 
-export async function renderApp({ route = '/leads', data = (d) => d, network: setup, extra }: Options = {}) {
+export async function renderApp({ route = '/leads', data = (d) => d, network: setup, extra, tracing }: Options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'lead-ui-'))
   // Seeded relative to this render, so "Overdue · 38 min" stays 38 however long the run has taken.
   const store = await openStore(join(dir, 'db.json'), () => data(seed(new Date())))
@@ -57,6 +60,7 @@ export async function renderApp({ route = '/leads', data = (d) => d, network: se
     store,
     faults: { latencyMs: { min: 0, max: 0 }, failureRate: 0 },
     log: () => {},
+    ...(tracing ? { tracing } : {}),
   })
   const network = new Network()
   setup?.(network)

@@ -9,7 +9,7 @@ export default defineConfig({
     strictPort: true,
     proxy: {
       '/api': `http://localhost:${process.env.MOCK_API_PORT ?? 8787}`,
-      // Traced mode: browser spans go to Jaeger's OTLP endpoint through the same origin (no CORS).
+      // Tracing: browser spans go to Jaeger's OTLP endpoint through the same origin (no CORS).
       '/otlp': { target: 'http://localhost:4318', rewrite: (path) => path.replace(/^\/otlp/, '') },
     },
   },

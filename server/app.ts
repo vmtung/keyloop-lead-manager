@@ -11,6 +11,7 @@ import {
   CreateActivityResponse,
   CreateLeadResponse,
   DevFaults,
+  DevTracing,
   DropStreamsResponse,
   type IsoDateTime,
   LeadDetailResponse,
@@ -27,6 +28,7 @@ import { suggestNextAction } from '../src/domain/suggest.ts'
 import { LEAD_SAMPLES } from './samples.ts'
 import { seed } from './seed.ts'
 import { appendActivity, claimLead, createLead, releaseLead, type Store } from './store.ts'
+import type { TracingSwitch } from './tracing.ts'
 
 export type Faults = DevFaults
 
@@ -40,6 +42,8 @@ export interface AppDeps {
   random?: () => number
   newId?: () => string
   keepAliveMs?: number
+  /** Absent in tests that don't need it: tracing then stays off. */
+  tracing?: TracingSwitch
 }
 
 type Listener = (event: ServerEvent) => void
@@ -55,8 +59,9 @@ export function createApp(deps: AppDeps) {
   const streams = new Set<SSEStreamingApi>()
   // Starts from env (server/config.ts); the demo tools can change it at runtime.
   let faults: Faults = deps.faults
-  // Tracing goes through the OpenTelemetry API, which does nothing until traced mode registers an
-  // SDK (server/tracing.ts). So tests and `pnpm dev` run the same code and record nothing.
+  const tracing: TracingSwitch = deps.tracing ?? { enabled: () => false, set: async () => {} }
+  // Tracing goes through the OpenTelemetry API, which does nothing until the demo tools switch it on
+  // and register an SDK (server/tracing.ts). Until then the same code records nothing.
   const tracer = trace.getTracer('lead-manager-api')
   const traced = async <T,>(name: string, fn: () => Promise<T>): Promise<T> =>
     tracer.startActiveSpan(name, async (span) => {
@@ -83,7 +88,7 @@ export function createApp(deps: AppDeps) {
   const app = new Hono<{ Variables: { requestId: string } }>().basePath('/api')
 
   // First, so the server span wraps the whole request, continuing the browser's trace if it sent a
-  // `traceparent` header (traced mode, AC-7.7).
+  // `traceparent` header (while tracing is on, AC-7.7).
   app.use(async (c, next) => {
     // The event stream is one request open for a whole session, and log uploads are about the
     // telemetry itself: neither belongs in a trace view.
@@ -218,6 +223,21 @@ export function createApp(deps: AppDeps) {
       void stream.close() // ends the response, so the browser sees the drop at once
     }
     return c.json(send(DropStreamsResponse, { dropped: open.length }))
+  })
+
+  app.get('/dev/tracing', (c) => c.json(send(DevTracing, { enabled: tracing.enabled() })))
+
+  app.put('/dev/tracing', async (c) => {
+    const body = DevTracing.safeParse(await readJson(c.req.raw))
+    if (!body.success) return c.json(error('validation_failed', body.error.message), 400)
+    try {
+      await tracing.set(body.data.enabled)
+    } catch (err) {
+      deps.log({ level: 'error', message: 'Tracing not switched on', error: String(err) })
+      return c.json(error('internal', (err as Error).message), 503)
+    }
+    deps.log({ level: 'info', message: `Tracing ${tracing.enabled() ? 'on' : 'off'} (demo tools)` })
+    return c.json(send(DevTracing, { enabled: tracing.enabled() }))
   })
 
   app.get('/users', (c) =>

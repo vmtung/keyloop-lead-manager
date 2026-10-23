@@ -19,14 +19,6 @@
         "dev"
       ],
       "port": 5173
-    },
-    {
-      "name": "lead-manager-traced",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "dev:traced"
-      ],
-      "port": 5173
     }
   ]
 }

@@ -388,6 +388,7 @@ kbd {
   border: 0; border-radius: var(--radius-control); background: none; text-align: left; cursor: pointer;
 }
 .demo__action svg { flex: none; color: var(--muted); }
+a.demo__action { color: inherit; text-decoration: none; }
 .demo__action:hover:not(:disabled) { background: var(--raised); }
 .demo__action:disabled { color: var(--muted); cursor: not-allowed; }
 .demo__modes {

@@ -1,11 +1,23 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
+import { TracingUnavailable, type TracingSwitch } from '../../server/tracing.ts'
 import { renderApp } from '../test/renderApp.tsx'
 import DemoTools from './DemoTools.tsx'
 
-async function openTools() {
-  const utils = await renderApp({ extra: <DemoTools /> })
+// The real browser tracing patches fetch and exports to Jaeger; here it only records starts and stops.
+const browser = vi.hoisted(() => ({ starts: 0, stops: 0 }))
+vi.mock('../observability/tracing.ts', () => ({
+  startTracing: () => {
+    browser.starts += 1
+    return async () => {
+      browser.stops += 1
+    }
+  },
+}))
+
+async function openTools(tracing?: TracingSwitch) {
+  const utils = await renderApp({ extra: <DemoTools />, ...(tracing ? { tracing } : {}) })
   await within(await screen.findByRole('region', { name: 'Leads' })).findByText('Hannah Okafor')
   await screen.findByText('Live')
   await userEvent.click(screen.getByRole('button', { name: 'Demo tools' }))
@@ -62,5 +74,42 @@ describe('demo tools', () => {
     await userEvent.click(within(panel).getByRole('button', { name: /Reset sample data/ }))
     await waitFor(() => expect(result()).toHaveTextContent('Sample data reset, with fresh timers.'))
     expect(store.read().leads).toHaveLength(8)
+  })
+
+  test('AC-7.7: tracing is off by default, and the switch turns it on and off for the server and the browser', async () => {
+    let on = false
+    browser.starts = browser.stops = 0
+    const { panel } = await openTools({ enabled: () => on, set: async (next) => void (on = next) })
+    const toggle = await within(panel).findByRole('switch', { name: 'Send traces to Jaeger' })
+    await waitFor(() => expect(toggle).toBeEnabled())
+    expect(toggle).not.toBeChecked()
+    expect(browser.starts).toBe(0)
+
+    await userEvent.click(toggle)
+    await waitFor(() => expect(toggle).toBeChecked())
+    expect(on).toBe(true)
+    await waitFor(() => expect(browser.starts).toBe(1))
+    expect(within(panel).getByRole('link', { name: /Open Jaeger/ })).toHaveAttribute('href', expect.stringContaining('16686'))
+
+    await userEvent.click(toggle)
+    await waitFor(() => expect(toggle).not.toBeChecked())
+    expect(on).toBe(false)
+    await waitFor(() => expect(browser.stops).toBe(1))
+  })
+
+  test('AC-7.7: switching tracing on with Jaeger down says how to start it, and stays off', async () => {
+    browser.starts = 0
+    const { panel } = await openTools({
+      enabled: () => false,
+      set: async () => {
+        throw new TracingUnavailable('http://localhost:4318/v1/traces')
+      },
+    })
+    const toggle = await within(panel).findByRole('switch', { name: 'Send traces to Jaeger' })
+    await waitFor(() => expect(toggle).toBeEnabled())
+    await userEvent.click(toggle)
+    await waitFor(() => expect(result()).toHaveTextContent('Jaeger isn’t running. Start it with pnpm traces:up.'))
+    expect(toggle).not.toBeChecked()
+    expect(browser.starts).toBe(0)
   })
 })

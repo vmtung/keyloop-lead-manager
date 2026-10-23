@@ -16,7 +16,6 @@
     "simulate:lead": "node scripts/simulate-lead.ts",
     "reset-data": "node -e \"require('node:fs').rmSync('server/data',{recursive:true,force:true})\"",
     "test:e2e": "playwright test",
-    "dev:traced": "VITE_TRACING=true OTEL_TRACING=true pnpm dev",
     "traces:up": "docker compose up -d jaeger",
     "traces:down": "docker compose down"
   },

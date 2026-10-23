@@ -10,7 +10,7 @@ import { createApp } from './app.ts'
 import { seed } from './seed.ts'
 import { openStore } from './store.ts'
 
-// Traced mode registers a real provider; here it exports to memory instead of Jaeger.
+// Switching tracing on registers a real provider; here it exports to memory instead of Jaeger.
 const exporter = new InMemorySpanExporter()
 const provider = new NodeTracerProvider({ spanProcessors: [new SimpleSpanProcessor(exporter)] })
 let dir: string

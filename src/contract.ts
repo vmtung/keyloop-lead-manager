@@ -145,3 +145,6 @@ export const DevFaults = z
 export type DevFaults = z.infer<typeof DevFaults>
 
 export const DropStreamsResponse = z.object({ dropped: z.int().nonnegative() })
+
+export const DevTracing = z.object({ enabled: z.boolean() })
+export type DevTracing = z.infer<typeof DevTracing>

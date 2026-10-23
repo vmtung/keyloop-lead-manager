@@ -12,7 +12,7 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 |---|---|---|
 | `x-user-id` | request | Who is acting (stand-in for auth, see A2). Required on `POST /leads/:id/activities`. |
 | `x-request-id` | request and response | A UUID the client generates per request. The server logs it and echoes it back. |
-| `traceparent` | request | Traced mode only: W3C trace context from the browser, so the server's spans join the same trace. |
+| `traceparent` | request | While tracing is on: W3C trace context from the browser, so the server's spans join the same trace. |
 
 ## Endpoints
 
@@ -89,6 +89,8 @@ fault injection, so a flaky API can always be switched back to normal.
 | `POST /dev/leads` | | 201 `CreateLeadResponse`: a sample website enquiry, announced as `lead.created` |
 | `POST /dev/reset` | | 200 `LeadListResponse`: the sample data again, with fresh timers |
 | `POST /dev/drop-streams` | | 200 `DropStreamsResponse`: closes every live event stream, so clients reconnect |
+| `GET /dev/tracing` | | 200 `DevTracing`: whether the server is sending traces to Jaeger |
+| `PUT /dev/tracing` | `DevTracing` | 200 `DevTracing`; 400 `validation_failed`; 503 `internal` when switching on and Jaeger can't be reached |
 
 ## Mock server fault injection
 
