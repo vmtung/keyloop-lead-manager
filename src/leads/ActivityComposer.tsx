@@ -1,7 +1,7 @@
 import { type FormEvent, type KeyboardEvent, useRef, useState } from 'react'
 import { describeFailure } from '../api/describeFailure.ts'
 import { useAnnounce, useCurrentUser } from '../app/context.tsx'
-import { type ActivityId, ActivityType, type LeadId, type NewActivity } from '../contract.ts'
+import { type ActivityId, ActivityType, type LeadId, type NewActivity, type Suggestion } from '../contract.ts'
 import { ACTIVITY_LABEL } from '../domain/labels.ts'
 import { useFailedActivity, useLogActivity } from './queries.ts'
 
@@ -12,7 +12,7 @@ const MAX = 2000
  * Logs a follow-up optimistically (AC-4.1–4.4). A failed activity keeps its ID, so Retry, or
  * resubmitting the same text, cannot create a duplicate if the first attempt did reach the server.
  */
-export function ActivityComposer({ leadId }: { leadId: LeadId }) {
+export function ActivityComposer({ leadId, suggestion }: { leadId: LeadId; suggestion: Suggestion | null }) {
   const { user, status: userStatus } = useCurrentUser()
   const announce = useAnnounce()
   const logActivity = useLogActivity(leadId)
@@ -72,12 +72,31 @@ export function ActivityComposer({ leadId }: { leadId: LeadId }) {
     send(failed.activity)
   }
 
+  /** Fills the composer only; the salesperson edits and logs it (AC-9.2). */
+  function applySuggestion(s: Suggestion) {
+    setType(s.type)
+    setSummary(s.draft)
+    document.getElementById(COMPOSER_ID)?.focus()
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) submit()
   }
 
   return (
     <form className="composer" onSubmit={submit} aria-label="Log a follow-up">
+      {suggestion && (
+        <div className="suggestion">
+          <p>
+            <span className="suggestion__action">Suggested: {ACTIVITY_LABEL[suggestion.type]}.</span>{' '}
+            {suggestion.reason}
+            <span className="meta suggestion__source"> Rules-based stand-in for AIME.</span>
+          </p>
+          <button type="button" className="button button--secondary button--small" onClick={() => applySuggestion(suggestion)}>
+            Use
+          </button>
+        </div>
+      )}
       <fieldset className="segmented">
         <legend className="visually-hidden">Activity type</legend>
         {ActivityType.options.map((option) => (

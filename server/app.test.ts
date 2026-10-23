@@ -77,6 +77,17 @@ describe('reading leads', () => {
     expect(times.length).toBe(3)
   })
 
+  test('AC-9.1, AC-9.3: the detail carries a suggestion, or null once an appointment is booked', async () => {
+    const { app } = await setup()
+    const awaiting = LeadDetailResponse.parse(await (await app.request(`/api/leads/${AWAITING_LEAD}`)).json())
+    expect(awaiting.suggestion).toMatchObject({ type: 'call' })
+
+    const booked = LeadDetailResponse.parse(
+      await (await app.request('/api/leads/00000000-0000-4000-8000-000000000005')).json(),
+    )
+    expect(booked.suggestion).toBeNull()
+  })
+
   test.each(['00000000-0000-4000-8000-0000000000ff', 'not-a-uuid'])('unknown lead %s → 404', async (id) => {
     const { app } = await setup()
     const res = await app.request(`/api/leads/${id}`)

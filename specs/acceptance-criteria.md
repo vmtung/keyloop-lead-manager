@@ -87,3 +87,11 @@ AI_LOG).
 | AC-8.4 | Only the owner can release a claim. Releasing an unclaimed lead changes nothing. | unit (server) |
 | AC-8.5 | Logging the first contact attempt on an unclaimed lead claims it for the author. A note does not. | integration |
 | AC-8.6 | A claim or release made elsewhere shows up in an open inbox and lead without a reload. | integration |
+
+## 9. Suggested next action (AIME stand-in)
+
+| ID | Criterion | Test |
+|---|---|---|
+| AC-9.1 | The lead shows a suggested next step from the rules in A19, with its reason, labelled as a rules-based stand-in for AIME. | unit, integration |
+| AC-9.2 | **Use** fills the composer with the suggested type and a draft summary. Nothing is logged until the salesperson submits. | integration |
+| AC-9.3 | With no suggestion (an appointment is booked, or the lead was contacted recently), nothing is shown. | unit, integration |

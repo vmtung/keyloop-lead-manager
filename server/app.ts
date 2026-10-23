@@ -20,6 +20,7 @@ import {
   UserId,
   UserListResponse,
 } from '../src/contract.ts'
+import { suggestNextAction } from '../src/domain/suggest.ts'
 import { appendActivity, claimLead, createLead, releaseLead, type Store } from './store.ts'
 
 export interface Faults {
@@ -137,7 +138,8 @@ export function createApp(deps: AppDeps) {
     const activities = data.activities
       .filter((a) => a.leadId === lead.id)
       .sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt))
-    return c.json(send(LeadDetailResponse, { lead, activities }))
+    const suggestion = suggestNextAction(lead, activities, now().getTime())
+    return c.json(send(LeadDetailResponse, { lead, activities, suggestion }))
   })
 
   const currentUser = (header: string | undefined) => {

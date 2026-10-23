@@ -359,3 +359,34 @@ describe('claiming a lead', () => {
     await waitFor(() => expect(oliviaRow()).toHaveTextContent('Priya ·'))
   })
 })
+
+describe('suggested next action (AIME stand-in)', () => {
+  test('AC-9.1, AC-9.2: a suggestion fills the composer, and nothing is logged until submitted', async () => {
+    const { store, live } = await renderApp({ route: `/leads/${LEADS.oliviaAwaiting3min}` })
+    const suggestion = (await screen.findByText('Suggested: Call.')).closest('.suggestion') as HTMLElement
+    await screen.findByText('Live')
+    expect(suggestion).toHaveTextContent('Wants a test drive.')
+    expect(suggestion).toHaveTextContent('Rules-based stand-in for AIME.')
+
+    const before = store.read().activities.length
+    await userEvent.click(within(suggestion).getByRole('button', { name: 'Use' }))
+    expect(screen.getByLabelText('Summary')).toHaveValue('Called to book a test drive.')
+    expect(screen.getByLabelText('Summary')).toHaveFocus()
+    expect(screen.getByRole('radio', { name: 'Call' })).toBeChecked()
+    expect(store.read().activities).toHaveLength(before)
+
+    // Logging it moves the lead on, so "call" is no longer suggested. With the live stream down,
+    // only the mutation itself can clear it (the server's event can arrive before or after).
+    act(() => live.drop())
+    await userEvent.click(screen.getByRole('button', { name: 'Log activity' }))
+    await waitFor(() => expect(screen.queryByText('Suggested: Call.')).not.toBeInTheDocument())
+    await screen.findByText('You claimed this')
+    expect(screen.queryByText('Suggested: Call.')).not.toBeInTheDocument()
+  })
+
+  test('AC-9.3: no suggestion once an appointment is booked', async () => {
+    await renderApp({ route: `/leads/${LEADS.aishaContacted}` })
+    await screen.findByText('Test drive booked for Thursday 18:00.')
+    expect(screen.queryByText(/^Suggested:/)).not.toBeInTheDocument()
+  })
+})

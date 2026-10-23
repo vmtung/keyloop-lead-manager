@@ -188,3 +188,17 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   integration test reproduces losing the race before the other claim's event arrives. In the
   browser, Tom claimed in one tab and Anna's tab updated by itself. axe: no violations. A data file
   from before claims still loads.
+
+## 10. NICE 3: suggested next action (AIME stand-in)
+
+- **Ask:** A stubbed suggestion that shows where Keyloop's AIME would plug in, without pretending to
+  be AI.
+- **AI output:** spec first (A19, AC-9.1–9.3), four rules as a pure function with tests first, the
+  server returning the suggestion with the lead, and a "Use" button that only fills the composer,
+  labelled "Rules-based stand-in for AIME". The salesperson stays the author of every activity.
+- **Caught by the compiler:** adding `suggestion` to the contract broke the cache update after a
+  save. Keeping the old suggestion would have shown "Suggested: Call" right after the call was
+  logged; the fix clears it and refetches.
+- **Caught by a mutation check:** the test for that fix passed even with the fix removed. The live
+  stream's own refetch was clearing the suggestion first, which happens to be the usual order but
+  isn't guaranteed. The test now drops the live connection before saving, and fails without the fix.

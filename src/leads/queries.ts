@@ -67,8 +67,12 @@ export function useLogActivity(leadId: LeadId) {
           activities: old.activities.some((a) => a.id === activity.id)
             ? old.activities
             : [...old.activities, activity],
+          // The old suggestion may be the step just taken ("Call" after a call): drop it, and
+          // refetch so the server works out the next one.
+          suggestion: null,
         },
       )
+      void queryClient.invalidateQueries({ queryKey: leadKeys.detail(leadId) })
       setListLead(queryClient, lead)
     },
   })

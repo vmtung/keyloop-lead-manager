@@ -19,7 +19,7 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 |---|---|---|---|
 | `GET /users` | | 200 `UserListResponse` | |
 | `GET /leads` | | 200 `LeadListResponse`, all leads, unsorted (the client sorts, AC-1.2) | |
-| `GET /leads/:leadId` | | 200 `LeadDetailResponse`, activities oldest first | 404 `not_found` |
+| `GET /leads/:leadId` | | 200 `LeadDetailResponse`, activities oldest first, plus `suggestion` (A19) | 404 `not_found` |
 | `POST /leads/:leadId/activities` | `NewActivity` | 201 `CreateActivityResponse` (new) or 200 (same ID replayed) | 400 `validation_failed`, 401 `unauthenticated`, 404 `not_found`, 409 `idempotency_conflict` |
 | `POST /leads` | `NewLead` | 201 `CreateLeadResponse` | 400 `validation_failed` |
 | `POST /leads/:leadId/claim` | | 200 `LeadResponse` (claimed, or already yours) | 401 `unauthenticated`, 404 `not_found`, 409 `claim_conflict` |

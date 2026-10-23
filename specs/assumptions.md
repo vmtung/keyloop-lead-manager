@@ -68,10 +68,19 @@ The brief leaves these open. Each is a decision we can defend, and each names wh
   can still log follow-ups on a claimed lead, so teammates can cover for each other. Claims don't
   expire on their own (future work).
 
+## Suggested next action
+
+- **A19. A rules-based stand-in for AIME suggests the next step** on a lead, to show where Keyloop's
+  AIME agent would plug in (see the design doc). It never acts: the salesperson chooses to use the
+  suggestion, edits the draft, and logs it themselves. The rules, in order:
+  1. An appointment is booked: no suggestion.
+  2. No contact yet: call, with a reason that depends on the enquiry type.
+  3. The last contact attempt is over 24 hours old: follow up by SMS.
+  4. Otherwise: no suggestion.
+
 ## Only if time allows (specced before building)
 
 - Browser OpenTelemetry traces exported to Jaeger
-- A stubbed "suggested next action"
 
 ## Out of scope (covered as future work in the design doc)
 

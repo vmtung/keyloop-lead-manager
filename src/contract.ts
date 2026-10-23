@@ -79,7 +79,19 @@ export type NewLead = z.infer<typeof NewLead>
 
 export const UserListResponse = z.object({ users: z.array(User) })
 export const LeadListResponse = z.object({ leads: z.array(Lead) })
-export const LeadDetailResponse = z.object({ lead: Lead, activities: z.array(Activity) })
+/** A suggested next step from the rules-based AIME stand-in (specs A19). Never acted on by itself. */
+export const Suggestion = z.object({
+  type: ActivityType,
+  draft: z.string().min(1).max(2000),
+  reason: z.string().min(1),
+})
+export type Suggestion = z.infer<typeof Suggestion>
+
+export const LeadDetailResponse = z.object({
+  lead: Lead,
+  activities: z.array(Activity),
+  suggestion: Suggestion.nullable(),
+})
 export const CreateActivityResponse = z.object({ activity: Activity, lead: Lead })
 export const LeadResponse = z.object({ lead: Lead })
 export const CreateLeadResponse = LeadResponse

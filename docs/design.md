@@ -11,7 +11,7 @@ Requirements and decisions live in the repository, and this document links to th
 repeating them:
 
 - [`specs/assumptions.md`](../specs/assumptions.md): 17 assumptions where the brief was open
-- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 43 criteria with IDs that tests cite
+- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 46 criteria with IDs that tests cite
 - [`specs/api-contract.md`](../specs/api-contract.md) and [`src/contract.ts`](../src/contract.ts): the API
 - [`docs/adr/`](adr/): five architecture decision records
 
@@ -22,7 +22,8 @@ roadmap shaped it:
 
 - **Sales Hub and AIME.** Keyloop agreed to acquire Motortech.ai in January 2026, whose AIME agent
   qualifies leads, to fold into Sales Hub. Lead handling with AI in the loop is where this product
-  is heading, so section 11 shows where an AIME score and suggested action would plug in.
+  is heading. The app has a rules-based stand-in that suggests the next step, and section 11 shows
+  how the real AIME would replace it.
 - **Active Data Core**, the shared customer record. Here a lead carries its own customer details;
   in production the customer would be resolved against Active Data Core. That is listed as out of
   scope in the assumptions.
@@ -287,9 +288,9 @@ What changes past this scale (assumption A7: tens to low hundreds of open leads 
 
 | Level | Count | What it covers |
 |---|---|---|
-| Unit | 68 | SLA boundaries, response time, inbox order, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
-| Server | 39 | Every endpoint and error code, idempotency, claims including two at once, persistence, fault injection, SSE framing, log intake |
-| Integration | 25 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries and a lost claim race |
+| Unit | 77 | SLA boundaries, suggestion rules, response time, inbox order, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
+| Server | 40 | Every endpoint and error code, idempotency, claims including two at once, persistence, fault injection, SSE framing, log intake |
+| Integration | 27 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race and using a suggestion |
 | End-to-end | 1 | A lead arrives live, a call is logged, and it survives a reload, in Chrome, through the real proxy and SSE stream |
 
 Test names cite acceptance criteria (`AC-4.4: …`). Several tests were checked by breaking the code
@@ -335,7 +336,11 @@ flowchart LR
   ADC[("Active Data Core:<br/>customer record")] <--> LS
 ```
 
-Not built; this is the shape of the integration:
+**What is built** is a stand-in (assumption A19): `src/domain/suggest.ts` applies four rules, the
+server returns the result with the lead, and the composer shows it with **Use**, labelled as a
+stand-in. **Use** only fills the composer; the salesperson edits and logs it.
+
+**What the real integration would change:**
 
 - AIME subscribes to `lead.created`, scores the lead and suggests a next action, and publishes
   `lead.qualified`. The client treats it like any other thin event and refetches.
