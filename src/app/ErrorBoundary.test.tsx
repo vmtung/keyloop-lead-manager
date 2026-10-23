@@ -48,6 +48,6 @@ test('AC-7.4: when the lead pane crashes, the inbox keeps working', async () => 
 
   const alert = await screen.findByRole('alert')
   expect(within(alert).getByRole('heading', { level: 2 })).toHaveTextContent('Something went wrong')
-  expect(await screen.findByText('Hannah Okafor')).toBeInTheDocument()
+  expect(await screen.findByRole('link', { name: /Hannah Okafor/ })).toBeInTheDocument()
   expect(screen.getByRole('heading', { level: 2, name: 'Leads' })).toBeInTheDocument()
 })

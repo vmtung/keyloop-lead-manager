@@ -14,6 +14,8 @@ AI_LOG).
 | AC-1.3 | While loading, a skeleton list shows; no layout shift when data arrives. | integration (skeleton), e2e (layout shift) |
 | AC-1.4 | If loading fails, an error message and a **Retry** button show; Retry refetches. | integration |
 | AC-1.5 | With no leads, an empty state says so. | integration |
+| AC-1.6 | The inbox header shows three figures: leads waiting now (with how many are overdue), the share of leads answered within the 15-minute target over the last 24 hours, and the median first-response time over the last 24 hours. With nothing to measure, a figure shows a dash. | unit, integration |
+| AC-1.7 | Each waiting lead shows a bar filling toward the 15-minute target, coloured by its SLA state. A contacted lead that missed the target shows its response time in the warning colour, with the word "late". | integration |
 
 ## 2. Speed-to-lead
 
@@ -35,6 +37,8 @@ AI_LOG).
 | AC-3.4 | With no activities yet, the log shows "Lead received" and a prompt to log the first follow-up. | integration |
 | AC-3.5 | An unknown lead ID shows a "Lead not found" state with a link back to the inbox. | integration |
 | AC-3.6 | If loading the lead fails, an error with **Retry** shows; the inbox stays usable. | integration |
+| AC-3.7 | With no lead open, the main pane shows the lead to call next: the longest-waiting unclaimed lead (or, if all are claimed, the longest-waiting one), with its wait, enquiry and an **Open** link. With no one waiting, it says so. | unit, integration |
+| AC-3.8 | The lead header's primary action calls the customer (a `tel:` link with their number). | integration |
 
 ## 4. Logging an activity
 

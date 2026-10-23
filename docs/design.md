@@ -11,7 +11,7 @@ Requirements and decisions live in the repository, and this document links to th
 repeating them:
 
 - [`specs/assumptions.md`](../specs/assumptions.md): 17 assumptions where the brief was open
-- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 47 criteria with IDs that tests cite
+- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 51 criteria with IDs that tests cite
 - [`specs/api-contract.md`](../specs/api-contract.md) and [`src/contract.ts`](../src/contract.ts): the API
 - [`docs/adr/`](adr/): five architecture decision records
 
@@ -77,7 +77,7 @@ proxy matters: two of the live-update bugs lived in it (section 6).
 | Event subscriber | `src/api/events.ts` | Owns the `EventSource`: parses events against the contract, reconnects with backoff, and treats 35 s of silence as a dropped connection. |
 | Server state | `src/leads/queries.ts` | TanStack Query hooks. Logging an activity is a mutation whose pending and failed states live in the mutation cache, so they outlive any one screen. |
 | Live updates | `src/leads/live.tsx` | Turns each event into cache invalidations, a screen-reader announcement and a brief highlight on new leads. |
-| Screens | `src/leads/*.tsx`, `src/App.tsx` | Inbox, lead detail, claim line, activity log, composer; two-pane on desktop, one pane at a time on a phone. |
+| Screens | `src/leads/*.tsx`, `src/App.tsx` | Inbox with its speed-to-lead figures and a clock bar per waiting lead; "Next up" when no lead is open; lead detail with the wait as its headline and Call as its primary action; claim line, activity timeline, composer. Two-pane on desktop, one pane at a time on a phone. |
 | Observability | `src/observability/`, `src/app/ErrorBoundary.tsx` | Structured logs with session and user, Web Vitals, error boundaries, global error handlers, log shipping. |
 | Mock API | `server/` | REST, SSE, log intake, idempotent writes, conditional claims, fault injection, JSON-file persistence. |
 
@@ -289,7 +289,7 @@ activity then produces one trace across both services (AC-7.7):
 
 Measured on the production build:
 
-- **JavaScript:** 134 KB gzipped in one chunk. react-dom is 66 KB, Zod 26 KB, and the app's own code
+- **JavaScript:** 135 KB gzipped in one chunk. react-dom is 66 KB, Zod 26 KB, and the app's own code
   about 12 KB. Icons tree-shake to 2.5 KB. Zod's smaller `zod/mini` build is the main lever left; it
   isn't worth its less readable syntax for an internal tool cached after the first load.
 - **Load:** FCP 100 to 170 ms and LCP 330 to 700 ms in Chrome on a lead page. The LCP element is the
@@ -310,9 +310,9 @@ What changes past this scale (assumption A7: tens to low hundreds of open leads 
 
 | Level | Count | What it covers |
 |---|---|---|
-| Unit | 84 | SLA boundaries, suggestion rules, response time, inbox order, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
+| Unit | 91 | SLA boundaries, suggestion rules, response time, inbox order, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
 | Server | 41 | Every endpoint and error code, idempotency, claims including two at once, trace propagation, persistence, fault injection, SSE framing, log intake |
-| Integration | 28 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race and using a suggestion |
+| Integration | 31 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race and using a suggestion |
 | End-to-end | 2 | A lead arrives live, a call is logged, and it survives a reload, in Chrome, through the real proxy and SSE stream; and the list doesn't move when data replaces the loading skeleton |
 
 Test names cite acceptance criteria (`AC-4.4: …`). Several tests were checked by breaking the code

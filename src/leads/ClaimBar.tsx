@@ -7,6 +7,7 @@ import { describeFailure } from '../api/describeFailure.ts'
 import { useAnnounce, useCurrentUser } from '../app/context.tsx'
 import type { Lead, LeadDetailResponse } from '../contract.ts'
 import { formatWhen } from '../domain/format.ts'
+import { Avatar } from './Avatar.tsx'
 import { leadKeys, useClaim } from './queries.ts'
 
 /** Who has this lead, and the one action that fits: Claim, Release, or nothing (AC-8.1, 8.2). */
@@ -43,7 +44,7 @@ export function ClaimBar({ lead, now }: { lead: Lead; now: number }) {
   return (
     <div className="claim">
       <p className="claim__state">
-        <UserRound aria-hidden size={14} />
+        {owner === null ? <UserRound aria-hidden size={16} /> : <Avatar user={owner.by} size="medium" />}
         {owner === null ? (
           <span>Unclaimed</span>
         ) : (
@@ -54,7 +55,7 @@ export function ClaimBar({ lead, now }: { lead: Lead; now: number }) {
         )}
       </p>
       {owner === null && (
-        <button type="button" className="button button--secondary button--small" disabled={claim.isPending || !user}
+        <button type="button" className="button button--secondary" disabled={claim.isPending || !user}
           onClick={() => act('claim')}>
           {claim.isPending ? 'Claiming…' : 'Claim'}
         </button>

@@ -248,3 +248,26 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   wrap to two lines at tablet width.
 - **Why it matters:** a test is only evidence if it fails when the code is wrong. Every new test in
   this pass was shown to fail first.
+
+## 13. Design pass with the taste skill
+
+- **Ask:** The UI looks bland; use the design skill to improve it, and find more improvements
+  beyond the four I picked.
+- **AI output:** inspected the before state first. The inspector's measures named the blandness:
+  40% of the first screen empty, half the text under 13 px, no headline figure, people as plain
+  text. It proposed changes that each show real data rather than decoration; I chose all four and
+  asked for more. Built, with spec and tests first for the logic:
+  - three figures in the inbox header: waiting now, share answered within 15 minutes over 24 hours,
+    and the median first reply (AC-1.6);
+  - a clock bar on each waiting row, and "late" on contacted leads that missed the target (AC-1.7);
+  - "Next up" in the empty pane, the longest-waiting unclaimed lead with the queue after it (AC-3.7);
+  - initials in a stable tint per salesperson;
+  - from its own critique: the wait as the lead's headline figure, Call as the primary action
+    (AC-3.8), a timeline line in the activity log, and 13 px small text.
+- **Second critique round, from screenshots:** truncated figure labels, broken spacing in the owner
+  text, two red marks for one fact on overdue rows (the bars now use a softer tint), the wait figure
+  floating above the name, and names wrapping in the queue cards. All fixed.
+- **Caught by the tests:** the layout-jump test from the test audit failed on the redesign. The
+  figures' loading placeholder was 4 px shorter than the loaded values. Fixed with exact heights.
+- **Verified:** 163 tests, both e2e tests, axe with no violations at desktop and phone widths, and
+  impeccable's detector clean.

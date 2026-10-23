@@ -7,8 +7,10 @@ salesperson can log a new follow-up from the same screen.
 
 <img src="docs/screenshots/desktop.jpg" alt="Inbox with leads grouped by response status beside an open lead showing its activity log and composer" width="720"> <img src="docs/screenshots/phone.jpg" alt="The same lead on a phone, one pane at a time" width="180">
 
-- **Speed to lead.** Each waiting lead shows how long it has waited and whether it is on track,
-  at risk (10 minutes) or overdue (15 minutes). The inbox puts the longest-waiting first.
+- **Speed to lead.** The inbox leads with three figures: who is waiting now, the share answered
+  within 15 minutes over the last day, and the median first reply. Each waiting lead has a clock bar
+  filling toward the target, and the longest-waiting comes first. With no lead open, the main pane
+  offers the one to call next.
 - **Live.** New website leads and other salespeople's follow-ups appear without a reload.
 - **Claiming.** A salesperson claims a lead so two people don't call the same customer. If two
   claim at once, one wins and the other sees who, straight away. The first call claims it too.
@@ -30,7 +32,7 @@ made slow or unreliable on purpose.
 |---|---|
 | [System design](docs/design.md) | Architecture, data flow, technology choices, observability, scale, and how GenAI helped with the design |
 | [Assumptions](specs/assumptions.md) | Where the brief was open, what was decided and why |
-| [Acceptance criteria](specs/acceptance-criteria.md) | 47 criteria; tests cite them by ID |
+| [Acceptance criteria](specs/acceptance-criteria.md) | 51 criteria; tests cite them by ID |
 | [API contract](specs/api-contract.md) | Endpoints, events and fault injection; schemas in [`src/contract.ts`](src/contract.ts) |
 | [Decision records](docs/adr/) | Stack, server-sent events, mock backend, optimistic logging, claiming |
 | [AI collaboration log](AI_LOG.md) | Each step with the AI: what I asked, what it produced, what I decided |
@@ -88,7 +90,7 @@ Jaeger with `pnpm traces:down`. Normal mode needs no Docker and sends no traces.
 pnpm test
 ```
 
-153 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+163 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
@@ -182,5 +184,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-153 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+163 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

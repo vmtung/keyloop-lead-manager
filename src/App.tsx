@@ -6,6 +6,8 @@ import { useShortcuts } from './app/useShortcuts.ts'
 import { LeadId, type UserId } from './contract.ts'
 import { LeadDetail, LeadNotFound } from './leads/LeadDetail.tsx'
 import { LeadInbox } from './leads/LeadInbox.tsx'
+import { NextUp } from './leads/NextUp.tsx'
+import { Avatar } from './leads/Avatar.tsx'
 import { LiveIndicator } from './leads/live.tsx'
 
 export default function App() {
@@ -56,10 +58,7 @@ function LeadsScreen() {
       )}
       <LeadInbox selectedId={leadId} />
       {param === undefined ? (
-        <section className="detail detail--empty">
-          <p className="meta">Select a lead to see its details and follow-ups.</p>
-          <p className="meta">Keys: j and k to move, Enter to open, c to log a follow-up.</p>
-        </section>
+        <NextUp />
       ) : leadId ? (
         <ErrorBoundary key={leadId} scope="pane">
           <LeadDetail leadId={leadId} />
@@ -77,6 +76,7 @@ function UserSwitcher() {
   return (
     <label className="user-switcher">
       <span className="meta">Signed in as</span>
+      <Avatar user={user} size="medium" />
       <select value={user.id} onChange={(e) => setUserId(e.target.value as UserId)}>
         {users.map((u) => (
           <option key={u.id} value={u.id}>{u.name}</option>

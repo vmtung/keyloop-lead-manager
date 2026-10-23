@@ -36,8 +36,8 @@ test('a website lead arrives live, is followed up, and the follow-up survives a 
   // AC-3.2 and AC-4.6: the deep link reloads to the same lead, with the follow-up persisted.
   await page.goto(leadUrl)
   await expect(page.getByRole('heading', { level: 1, name })).toBeVisible()
-  await expect(entry).toContainText('by Anna Clarke')
-  await expect(page.getByRole('article').getByText(/Responded in/)).toBeVisible()
+  await expect(entry).toContainText('Anna Clarke')
+  await expect(page.getByRole('article').getByText('First response')).toBeVisible()
   await expect(
     page.getByRole('region', { name: /^Contacted/ }).getByRole('link', { name: new RegExp(name) }),
   ).toBeVisible()

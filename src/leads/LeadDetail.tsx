@@ -51,18 +51,22 @@ export function LeadDetail({ leadId }: { leadId: LeadId }) {
     <article id="lead-detail" tabIndex={-1} className="detail" aria-labelledby="lead-name">
       <BackLink />
       <header className="detail__header">
-        <h1 id="lead-name">{lead.customer.name}</h1>
-        <p className="contact">
-          <a href={`tel:${lead.customer.phone.replace(/\s/g, '')}`} className="num">
-            <Phone aria-hidden size={14} /> {lead.customer.phone}
-          </a>
-          <a href={`mailto:${lead.customer.email}`}>
-            <Mail aria-hidden size={14} /> {lead.customer.email}
-          </a>
-        </p>
-        <ClaimBar lead={lead} now={now} />
+        <div className="detail__identity">
+          <h1 id="lead-name">{lead.customer.name}</h1>
+          <p className="detail__subject">{subjectLine(lead)}</p>
+        </div>
         <SpeedToLeadMeter lead={lead} now={now} />
       </header>
+      <div className="detail__actions">
+        {/* Calling the customer is the job this screen exists for (AC-3.8). */}
+        <a href={`tel:${lead.customer.phone.replace(/\s/g, '')}`} className="button button--primary num">
+          <Phone aria-hidden size={16} /> Call {lead.customer.phone}
+        </a>
+        <a href={`mailto:${lead.customer.email}`} className="button button--secondary">
+          <Mail aria-hidden size={16} /> Email
+        </a>
+        <ClaimBar lead={lead} now={now} />
+      </div>
       <div className="detail__body">
         <section className="detail__log" aria-label="Follow-ups">
           <ActivityLog lead={lead} activities={activities} pending={pending} now={now} />
@@ -79,6 +83,8 @@ function LeadFacts({ lead, now }: { lead: Lead; now: number }) {
   return (
     <aside className="facts" aria-label="Lead details">
       <dl>
+        <dt>Email</dt>
+        <dd>{lead.customer.email}</dd>
         <dt>Enquiry</dt>
         <dd>{ENQUIRY_LABEL[lead.enquiryType]}</dd>
         <dt>Received</dt>
@@ -101,6 +107,16 @@ function LeadFacts({ lead, now }: { lead: Lead; now: number }) {
       )}
     </aside>
   )
+}
+
+/** "Vehicle enquiry · Ford Puma · £18,990": what the customer asked about, in one line. */
+function subjectLine(lead: Lead): string {
+  const parts = [ENQUIRY_LABEL[lead.enquiryType]]
+  if (lead.vehicle) {
+    parts.push(`${lead.vehicle.make} ${lead.vehicle.model}`)
+    if (lead.vehicle.pricePence !== null) parts.push(formatPrice(lead.vehicle.pricePence))
+  }
+  return parts.join(' · ')
 }
 
 const Missing = () => <span className="meta" aria-label="Not given">—</span>

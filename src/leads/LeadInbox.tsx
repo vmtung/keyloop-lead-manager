@@ -3,9 +3,11 @@ import { Link } from 'react-router'
 import { describeFailure } from '../api/describeFailure.ts'
 import { useCurrentUser, useNow } from '../app/context.tsx'
 import type { Lead, LeadId, UserId } from '../contract.ts'
-import { formatDuration, formatWhen } from '../domain/format.ts'
+import { formatWhen } from '../domain/format.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
 import { SLA, sortForInbox, speedToLead } from '../domain/speedToLead.ts'
+import { Avatar } from './Avatar.tsx'
+import { InboxFigures } from './InboxFigures.tsx'
 import { useLive } from './live.tsx'
 import { useLeads, useUnsavedLeadIds } from './queries.ts'
 import { SpeedToLeadPill } from './SpeedToLeadStatus.tsx'
@@ -20,8 +22,8 @@ export function LeadInbox({ selectedId }: { selectedId: LeadId | undefined }) {
     <section className="inbox" aria-labelledby="inbox-title">
       <header className="inbox__header">
         <Title id="inbox-title" className="inbox__title">Leads</Title>
-        {/* Always rendered, so its line is reserved while loading and the list doesn't jump (AC-1.3). */}
-        <p className="inbox__finding">{leads.data && finding(leads.data, now)}</p>
+        {/* Always rendered, so its space is reserved while loading and the list doesn't jump (AC-1.3). */}
+        <InboxFigures leads={leads.data} now={now} />
       </header>
 
       {leads.isPending && <InboxSkeleton />}
@@ -94,7 +96,7 @@ function LeadGroup(props: { title: string; leads: Lead[]; state: RowState; empty
                 selected={lead.id === props.state.selectedId}
                 fresh={props.state.fresh.has(lead.id)}
                 unsaved={props.state.unsaved.has(lead.id)}
-                owner={ownerLabel(lead, props.state.userId)}
+                ownerLabel={ownerLabel(lead, props.state.userId)}
               />
             </li>
           ))}
@@ -116,23 +118,29 @@ function LeadRow(props: {
   selected: boolean
   fresh: boolean
   unsaved: boolean
-  owner: string | null
+  ownerLabel: string | null
 }) {
-  const { lead, now, selected, fresh, unsaved, owner } = props
-  const awaiting = lead.firstResponseAt === null
+  const { lead, now, selected, fresh, unsaved, ownerLabel } = props
+  const sla = speedToLead(lead, now)
   const subject = lead.vehicle
     ? `${ENQUIRY_LABEL[lead.enquiryType]} · ${lead.vehicle.make} ${lead.vehicle.model}`
     : ENQUIRY_LABEL[lead.enquiryType]
   return (
     <Link
       to={`/leads/${lead.id}`}
-      className={`lead-row${awaiting ? ' lead-row--awaiting' : ''}${fresh ? ' lead-row--new' : ''}`}
+      className={`lead-row${sla.status === 'awaiting_response' ? ' lead-row--awaiting' : ''}${fresh ? ' lead-row--new' : ''}`}
       aria-current={selected ? 'page' : undefined}
       data-lead-link
     >
       <span className="lead-row__name">{lead.customer.name}</span>
       <span className="lead-row__when num">
-        {owner && <span className="lead-row__owner">{owner} · </span>}
+        {lead.claim && ownerLabel && (
+          <>
+            <span className="lead-row__owner">
+              <Avatar user={lead.claim.by} /> {ownerLabel}
+            </span>{' · '}
+          </>
+        )}
         {formatWhen(lead.receivedAt, now)}
       </span>
       <span className="lead-row__subject">{subject}</span>
@@ -146,22 +154,14 @@ function LeadRow(props: {
           <SpeedToLeadPill lead={lead} now={now} />
         )}
       </span>
+      {sla.status === 'awaiting_response' && (
+        // The row's clock: time used of the target, coloured by state (AC-1.7). The pill says it in words.
+        <span className={`row-clock row-clock--${sla.sla}`} aria-hidden>
+          <span style={{ width: `${Math.min(1, sla.waitingMs / SLA.targetMs) * 100}%` }} />
+        </span>
+      )}
     </Link>
   )
-}
-
-/** The line under the title: the fact that most needs attention right now. */
-function finding(leads: Lead[], now: number): string {
-  const waiting = leads
-    .map((l) => speedToLead(l, now))
-    .filter((s) => s.status === 'awaiting_response')
-  if (waiting.length === 0) return 'Every lead has had a first response.'
-  const overdue = waiting.filter((s) => s.sla === 'overdue').length
-  const noun = waiting.length === 1 ? 'lead' : 'leads'
-  const target = formatDuration(SLA.targetMs)
-  return overdue === 0
-    ? `${waiting.length} ${noun} awaiting a first response, all within ${target}.`
-    : `${waiting.length} ${noun} awaiting a first response, ${overdue} over ${target}.`
 }
 
 function InboxSkeleton() {

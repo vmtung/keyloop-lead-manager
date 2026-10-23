@@ -1,5 +1,6 @@
 import { CalendarCheck, Globe, Mail, MessageSquare, Phone, StickyNote, type LucideIcon } from 'lucide-react'
-import type { Activity, ActivityType, Lead } from '../contract.ts'
+import type { Activity, ActivityType, Lead, User } from '../contract.ts'
+import { Avatar } from './Avatar.tsx'
 import { formatWhen } from '../domain/format.ts'
 import { ACTIVITY_LABEL } from '../domain/labels.ts'
 import type { LogActivityInput } from './queries.ts'
@@ -42,13 +43,13 @@ export function ActivityLog({
       </li>
 
       {activities.map((a) => (
-        <Entry key={a.id} type={a.type} summary={a.summary} author={a.author.name}>
+        <Entry key={a.id} type={a.type} summary={a.summary} author={a.author}>
           <time dateTime={a.occurredAt}>{formatWhen(a.occurredAt, now)}</time>
         </Entry>
       ))}
 
       {unsaved.map(({ activity, author }) => (
-        <Entry key={activity.id} type={activity.type} summary={activity.summary} author={author.name} pending>
+        <Entry key={activity.id} type={activity.type} summary={activity.summary} author={author} pending>
           <span>Saving…</span>
         </Entry>
       ))}
@@ -63,7 +64,7 @@ export function ActivityLog({
 function Entry(props: {
   type: ActivityType
   summary: string
-  author: string
+  author: User
   pending?: boolean
   children: React.ReactNode
 }) {
@@ -74,7 +75,8 @@ function Entry(props: {
         <Icon size={16} />
       </span>
       <p className="log__meta">
-        <span className="log__type">{ACTIVITY_LABEL[props.type]}</span> by {props.author} · {props.children}
+        <span className="log__type">{ACTIVITY_LABEL[props.type]}</span> by <Avatar user={props.author} />{' '}
+        {props.author.name} · {props.children}
       </p>
       <p className="log__summary">{props.summary}</p>
     </li>

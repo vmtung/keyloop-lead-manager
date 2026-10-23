@@ -8,6 +8,9 @@ import { LEADS, renderApp } from './test/renderApp.tsx'
 
 
 const region = (name: string) => screen.getByRole('region', { name: new RegExp(`^${name}`) })
+/** A lead's row in the inbox (its name also appears in the Next up card). */
+const inboxRow = async (name: string) =>
+  within(await screen.findByRole('region', { name: 'Leads' })).findByText(name)
 const rowNames = (container: HTMLElement) =>
   within(container)
     .getAllByRole('link')
@@ -47,7 +50,7 @@ describe('inbox', () => {
 
     network.failing = null
     await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }))
-    expect(await screen.findByText('Hannah Okafor')).toBeInTheDocument()
+    expect(await inboxRow('Hannah Okafor')).toBeInTheDocument()
   })
 
   test('AC-1.5: with no leads, an empty state says so', async () => {
@@ -57,10 +60,10 @@ describe('inbox', () => {
 })
 
 describe('lead detail', () => {
-  test('AC-3.1, AC-3.3: shows details and the log oldest first, starting with the enquiry', async () => {
+  test('AC-3.1, AC-3.3, AC-3.8: shows details, a Call action, and the log oldest first', async () => {
     await renderApp({ route: `/leads/${LEADS.aishaContacted}` })
     expect(await screen.findByRole('heading', { level: 1, name: 'Aisha Rahman' })).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: '07700 900503' })).toHaveAttribute('href', 'tel:07700900503')
+    expect(screen.getByRole('link', { name: 'Call 07700 900503' })).toHaveAttribute('href', 'tel:07700900503')
     expect(screen.getByText('£32,990')).toBeInTheDocument()
 
     const entries = within(screen.getByRole('list', { name: 'Activity log' })).getAllByRole('listitem')
@@ -70,7 +73,7 @@ describe('lead detail', () => {
       'Call',
       'Appointment',
     ])
-    expect(entries[2]).toHaveTextContent('by Anna Clarke')
+    expect(entries[2]).toHaveTextContent(/Anna Clarke/) // beside her initials, which are aria-hidden
   })
 
   test('AC-3.4: with no follow-ups, the log prompts for the first one', async () => {
@@ -94,7 +97,7 @@ describe('lead detail', () => {
       network: (n) => (n.failing = (url) => url.includes(`/leads/${LEADS.aishaContacted}`)),
     })
     expect(await screen.findByText(/Couldn’t load this lead/)).toBeInTheDocument()
-    expect(await screen.findByText('Hannah Okafor')).toBeInTheDocument()
+    expect(await inboxRow('Hannah Okafor')).toBeInTheDocument()
   })
 })
 
@@ -258,7 +261,7 @@ describe('live updates', () => {
 
   test('AC-5.1, AC-6.4: a new lead appears without a reload, highlighted and announced', async () => {
     const { postLead } = await renderApp()
-    await screen.findByText('Hannah Okafor')
+    await inboxRow('Hannah Okafor')
     expect(await screen.findByText('Live')).toBeInTheDocument()
 
     expect((await postLead(ELLIE)).status).toBe(201)
@@ -284,14 +287,14 @@ describe('live updates', () => {
     )
 
     const entry = (await screen.findByText('Booked Saturday 10:00')).closest('li')
-    expect(entry).toHaveTextContent('by Tom Hughes')
+    expect(entry).toHaveTextContent(/Tom Hughes/)
     // The lead was contacted by Tom, so the inbox moves it too.
     await waitFor(() => expect(rowNames(region('Contacted'))).toContain('Olivia Bennett'))
   })
 
   test('AC-5.3, AC-6.4: a dropped connection says so, and on reconnect refetches what was missed', async () => {
     const { live, postLead, network } = await renderApp()
-    await screen.findByText('Hannah Okafor')
+    await inboxRow('Hannah Okafor')
     await screen.findByText('Live')
 
     act(() => live.drop())
@@ -307,7 +310,7 @@ describe('live updates', () => {
     await act(async () => {
       void live.reconnect()
     })
-    expect(await screen.findByText('Ellie Turner')).toBeInTheDocument()
+    expect(await inboxRow('Ellie Turner')).toBeInTheDocument()
     expect(screen.getByText('Live')).toBeInTheDocument()
   })
 })
@@ -397,5 +400,42 @@ describe('suggested next action (AIME stand-in)', () => {
     await renderApp({ route: `/leads/${LEADS.aishaContacted}` })
     await screen.findByText('Test drive booked for Thursday 18:00.')
     expect(screen.queryByText(/^Suggested:/)).not.toBeInTheDocument()
+  })
+})
+
+describe('inbox figures and next up', () => {
+  test('AC-1.6: the header shows who is waiting and how fast the last 24 hours were answered', async () => {
+    await renderApp()
+    await inboxRow('Hannah Okafor')
+    const inbox = screen.getByRole('region', { name: 'Leads' })
+    const figure = (label: string) => within(inbox).getByText(label).closest('.figure') as HTMLElement
+
+    expect(figure('Waiting')).toHaveTextContent('3')
+    expect(figure('Waiting')).toHaveTextContent('1 overdue')
+    // Daniel answered in 6 min, Aisha in 24; George was answered more than a day ago.
+    expect(figure('In 15 min')).toHaveTextContent('50%')
+    expect(figure('In 15 min')).toHaveTextContent('of 2, last 24 h')
+    expect(figure('Median')).toHaveTextContent('15 min')
+  })
+
+  test('AC-1.7: waiting rows carry a clock bar, and a late response says so', async () => {
+    await renderApp()
+    await inboxRow('Hannah Okafor')
+    const awaiting = within(region('Awaiting response')).getAllByRole('link')
+    expect(awaiting.every((row) => row.querySelector('.row-clock--overdue, .row-clock--at_risk, .row-clock--on_track'))).toBe(true)
+    expect(within(region('Contacted')).getAllByRole('link').some((row) => row.querySelector('.row-clock'))).toBe(false)
+
+    const aisha = within(region('Contacted')).getByText('Aisha Rahman').closest('a')!
+    expect(aisha).toHaveTextContent('Responded in 24 min · late')
+  })
+
+  test('AC-3.7: with no lead open, the longest-waiting unclaimed lead is offered next', async () => {
+    await renderApp()
+    const next = await screen.findByRole('region', { name: 'Next up' })
+    expect(await within(next).findByText('Hannah Okafor')).toBeInTheDocument()
+    expect(within(next).getByText('Waiting')).toBeInTheDocument()
+
+    await userEvent.click(within(next).getByRole('link', { name: /Open lead/ }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Hannah Okafor' })).toBeInTheDocument()
   })
 })
