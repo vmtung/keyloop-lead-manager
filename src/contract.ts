@@ -94,6 +94,20 @@ export const ApiErrorResponse = z.object({
   error: z.object({ code: ApiErrorCode, message: z.string() }),
 })
 
+// Client logs (POST /api/logs)
+
+export const ClientLogEntry = z.object({
+  ts: IsoDateTime,
+  level: z.enum(['info', 'warn', 'error']),
+  event: z.string().min(1).max(100),
+  sessionId: z.uuid(),
+  fields: z.record(z.string(), z.unknown()),
+})
+export type ClientLogEntry = z.infer<typeof ClientLogEntry>
+
+export const ClientLogBatch = z.object({ entries: z.array(ClientLogEntry).min(1).max(100) })
+export type ClientLogBatch = z.infer<typeof ClientLogBatch>
+
 // Server-sent events on GET /api/events. Events are thin: the client refetches what changed.
 
 export const ServerEvent = z.discriminatedUnion('type', [

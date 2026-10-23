@@ -107,3 +107,24 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
 - **Why it matters:** the in-process tests skip the proxy hop, which is exactly where both bugs
   lived. That is the case for the Playwright test in Stage 5, and for checking what the AI built in
   the real environment rather than trusting green tests.
+
+## 6. Stage 4: observability
+
+- **Ask:** Web Vitals, error capture, and logs that can be followed across client and server.
+- **AI output:** Listed the choices with trade-offs; I chose the `web-vitals` package over a
+  hand-rolled INP, shipping client logs to a new `POST /api/logs` over console-only, and moving
+  OpenTelemetry to after hardening. The spec gained the endpoint and AC-7.6 before any code. Built:
+  a batching log shipper (sendBeacon when the page hides), a session ID on every entry, page-level
+  and pane-level error boundaries that show a reference the user can quote, and global handlers for
+  uncaught errors and rejections.
+- **Verified:** tests first for the shipper and the endpoint; a mutation check removing the pane
+  boundary (caught). In the browser, a 404 produced a server line and a client line in the same
+  terminal with the same request ID, and all five vitals arrived.
+- **Caught by running it:** on every reload, requests the browser aborted were logged as `network`
+  failures, false errors that would fill a dashboard. The AI's first fix (a flag set on `pagehide`)
+  passed its unit test but failed in the browser: the aborts land *before* `pagehide`. The test had
+  modelled the wrong order. Network failures are now logged one task later, after `pagehide` has
+  had its chance; re-tested in the browser with no false errors.
+- **Also corrected:** the AI first guessed that missing LCP and CLS were a quirk of the background
+  browser pane. A later run showed all five vitals arriving, so the guess was wrong, and it was not
+  recorded as a finding.

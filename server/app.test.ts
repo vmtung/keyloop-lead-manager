@@ -203,6 +203,54 @@ describe('fault injection', () => {
   )
 })
 
+describe('client logs (AC-7.6)', () => {
+  const batch = {
+    entries: [
+      {
+        ts: '2026-10-23T09:00:00.000Z',
+        level: 'error',
+        event: 'api.request_failed',
+        sessionId: '3f6c1f7e-8a7b-4c1d-9e2f-0a1b2c3d4e5f',
+        fields: { requestId: 'req-9', status: 500 },
+      },
+    ],
+  }
+  const post = (app: Awaited<ReturnType<typeof setup>>['app'], body: unknown) =>
+    app.request('/api/logs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+
+  test('prints each entry as a client line beside the server lines, matched by requestId', async () => {
+    const { app } = await setup()
+    const res = await post(app, batch)
+    expect(res.status).toBe(204)
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        source: 'client',
+        level: 'error',
+        event: 'api.request_failed',
+        requestId: 'req-9',
+        sessionId: batch.entries[0]!.sessionId,
+      }),
+    )
+    // The log request itself is not logged, or every batch would add a line about logging.
+    expect(logs.filter((l) => l.path === '/api/logs')).toHaveLength(0)
+  })
+
+  test('rejects a batch that breaks the contract', async () => {
+    const { app } = await setup()
+    expect((await post(app, { entries: [] })).status).toBe(400)
+    expect((await post(app, { entries: [{ level: 'loud' }] })).status).toBe(400)
+  })
+
+  test('fault injection never drops logs', async () => {
+    const { app } = await setup({ ...NO_FAULTS, failureRate: 1 })
+    expect((await post(app, batch)).status).toBe(204)
+  })
+})
+
 describe('events', () => {
   test('a quiet stream sends a named ping, which the client watchdog can hear', async () => {
     const { app } = await setup(NO_FAULTS, () => 0.5, 10)

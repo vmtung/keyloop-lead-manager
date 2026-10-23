@@ -6,6 +6,7 @@ import type { z } from 'zod'
 import {
   type ApiErrorCode,
   ApiErrorResponse,
+  ClientLogBatch,
   CreateActivityResponse,
   CreateLeadResponse,
   type IsoDateTime,
@@ -57,6 +58,7 @@ export function createApp(deps: AppDeps) {
     c.header('x-request-id', requestId)
     const started = performance.now()
     await next()
+    if (c.req.path === '/api/logs') return // a line per log batch would only be noise
     deps.log({
       level: c.res.status >= 500 ? 'error' : 'info',
       requestId,
@@ -69,7 +71,7 @@ export function createApp(deps: AppDeps) {
 
   // Latency and failures on every data endpoint; never on /health or the event stream.
   const injectFaults: MiddlewareHandler = async (c, next) => {
-    if (c.req.path === '/api/health' || c.req.path === '/api/events') return next()
+    if (['/api/health', '/api/events', '/api/logs'].includes(c.req.path)) return next()
     const { min, max } = deps.faults.latencyMs
     const delay = min + random() * (max - min)
     if (delay > 0) await new Promise((r) => setTimeout(r, delay))
@@ -83,6 +85,16 @@ export function createApp(deps: AppDeps) {
   const send = <S extends z.ZodType>(_schema: S, body: z.input<S>) => body
 
   app.get('/health', (c) => c.json({ ok: true }))
+
+  // Client log intake (AC-7.6): one line per entry, beside the server's own request lines.
+  app.post('/logs', async (c) => {
+    const body = ClientLogBatch.safeParse(await readJson(c.req.raw))
+    if (!body.success) return c.json(error('validation_failed', body.error.message), 400)
+    for (const { ts, level, event, sessionId, fields } of body.data.entries) {
+      deps.log({ ...fields, source: 'client', clientTs: ts, level, event, sessionId })
+    }
+    return c.body(null, 204)
+  })
 
   app.get('/events', (c) =>
     streamSSE(c, async (stream) => {

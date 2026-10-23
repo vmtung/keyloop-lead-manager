@@ -72,5 +72,6 @@ AI_LOG).
 | AC-7.1 | Every API response is validated against the contract. A malformed response is treated as an error, logged, and shown as a normal error state. | integration |
 | AC-7.2 | Requests time out after 10 seconds and show as an error. | integration |
 | AC-7.3 | Every request carries an `x-request-id`; the mock server logs it, so a client error can be matched to a server log line. | manual |
-| AC-7.4 | Render errors are caught by an error boundary that shows a recovery screen and logs the error. | integration |
+| AC-7.4 | Render errors are caught by an error boundary that shows a recovery screen with a reference the user can quote, and logs the error. A failure in the lead pane leaves the inbox working. | integration |
 | AC-7.5 | Web Vitals (LCP, INP, CLS) are reported through the same logger. | manual |
+| AC-7.6 | Client log entries (errors, failed requests, vitals) are batched and sent to `POST /api/logs`, and flushed when the page is hidden. Each carries a session ID and the signed-in user. Failing to send logs never breaks the app or logs in a loop. | unit |

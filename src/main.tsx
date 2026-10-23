@@ -9,9 +9,18 @@ import { createApi } from './api/client.ts'
 import { isRetryable } from './api/describeFailure.ts'
 import App from './App.tsx'
 import { AnnouncerProvider, ApiProvider, CurrentUserProvider, NowProvider } from './app/context.tsx'
+import { ErrorBoundary } from './app/ErrorBoundary.tsx'
 import { LiveUpdatesProvider } from './leads/live.tsx'
+import { isPageUnloading, startObservability } from './observability/setup.ts'
 
-const api = createApi({ fetch: window.fetch.bind(window), baseUrl: '/api', timeoutMs: 10_000 })
+startObservability()
+
+const api = createApi({
+  fetch: window.fetch.bind(window),
+  baseUrl: '/api',
+  timeoutMs: 10_000,
+  isUnloading: isPageUnloading,
+})
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +31,8 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <ErrorBoundary scope="page">
+      <QueryClientProvider client={queryClient}>
       <ApiProvider api={api}>
         <BrowserRouter>
           <NowProvider>
@@ -36,6 +46,7 @@ createRoot(document.getElementById('root')!).render(
           </NowProvider>
         </BrowserRouter>
       </ApiProvider>
-    </QueryClientProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )

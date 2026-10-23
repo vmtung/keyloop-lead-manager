@@ -23,6 +23,7 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 | `POST /leads/:leadId/activities` | `NewActivity` | 201 `CreateActivityResponse` (new) or 200 (same ID replayed) | 400 `validation_failed`, 401 `unauthenticated`, 404 `not_found`, 409 `idempotency_conflict` |
 | `POST /leads` | `NewLead` | 201 `CreateLeadResponse` | 400 `validation_failed` |
 | `GET /events` | | `text/event-stream` of `ServerEvent` | |
+| `POST /logs` | `ClientLogBatch` | 204 | 400 `validation_failed` |
 | `GET /health` | | 200 `{ "ok": true }` | |
 
 Every error body is an `ApiErrorResponse`: `{ "error": { "code": "...", "message": "..." } }`.
@@ -38,6 +39,14 @@ The client generates the activity `id` (UUID), so the request is idempotent (ADR
 
 The response includes the updated `lead`, so the client takes `firstResponseAt` from the server
 rather than computing it.
+
+### Client logs
+
+The browser batches its structured log entries (up to 20, or every 5 seconds) and posts them here,
+using `navigator.sendBeacon` when the page is being hidden so the last batch is not lost. The mock
+server prints each entry as one JSON line with `"source": "client"`, beside its own request lines,
+so a failed request can be followed across both sides by `requestId`. In production this endpoint
+would be an OpenTelemetry collector or a vendor intake; the client code would not change shape.
 
 ### Events
 
@@ -58,7 +67,7 @@ connection, because a dead connection behind a proxy can look open.
 ## Mock server fault injection
 
 Set through env vars when starting the mock server. They apply to every `/api` route except
-`/events` and `/health`.
+`/events`, `/health` and `/logs`.
 
 | Variable | Default | Effect |
 |---|---|---|

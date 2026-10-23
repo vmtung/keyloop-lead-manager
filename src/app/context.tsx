@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createContext, type ReactNode, use, useCallback, useEffect, useMemo, useState } from 'react'
 import type { Api } from '../api/client.ts'
 import type { User, UserId } from '../contract.ts'
+import { log } from '../observability/log.ts'
 
 function required<T>(value: T | null, name: string): T {
   if (value === null) throw new Error(`${name} is missing its provider`)
@@ -84,6 +85,11 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
       },
     }
   }, [users.data, users.status, userId])
+
+  const currentId = value.user?.id
+  useEffect(() => {
+    if (currentId) log.setContext({ userId: currentId })
+  }, [currentId])
 
   return <CurrentUserContext value={value}>{children}</CurrentUserContext>
 }

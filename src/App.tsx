@@ -1,6 +1,7 @@
 import { Gauge } from 'lucide-react'
 import { Link, Navigate, Outlet, Route, Routes, useParams } from 'react-router'
 import { useCurrentUser } from './app/context.tsx'
+import { ErrorBoundary } from './app/ErrorBoundary.tsx'
 import { useShortcuts } from './app/useShortcuts.ts'
 import { LeadId, type UserId } from './contract.ts'
 import { LeadDetail, LeadNotFound } from './leads/LeadDetail.tsx'
@@ -54,7 +55,9 @@ function LeadsScreen() {
           <p className="meta">Keys: j and k to move, Enter to open, c to log a follow-up.</p>
         </section>
       ) : leadId ? (
-        <LeadDetail key={leadId} leadId={leadId} />
+        <ErrorBoundary key={leadId} scope="pane">
+          <LeadDetail leadId={leadId} />
+        </ErrorBoundary>
       ) : (
         <LeadNotFound />
       )}

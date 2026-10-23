@@ -36,6 +36,8 @@ interface ApiOptions {
   fetch: typeof fetch
   baseUrl: string
   timeoutMs: number
+  /** True once the page is going away: requests it cuts off are not real failures, so not logged. */
+  isUnloading?: () => boolean
 }
 
 interface RequestOptions {
@@ -45,7 +47,7 @@ interface RequestOptions {
   signal?: AbortSignal | undefined
 }
 
-export function createApi({ fetch, baseUrl, timeoutMs }: ApiOptions) {
+export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false }: ApiOptions) {
   async function request<S extends z.ZodType>(
     path: string,
     schema: S,
@@ -58,7 +60,16 @@ export function createApi({ fetch, baseUrl, timeoutMs }: ApiOptions) {
 
     const timeout = AbortSignal.timeout(timeoutMs)
     const fail = (failure: ApiFailure): never => {
-      log.error('api.request_failed', { requestId, method, path, ...failure })
+      const entry = { requestId, method, path, ...failure }
+      if (failure.kind === 'network') {
+        // Leaving the page aborts in-flight requests, and the browser rejects them just before
+        // pagehide. Decide one task later, when we know whether the page is going away.
+        setTimeout(() => {
+          if (!isUnloading()) log.error('api.request_failed', entry)
+        }, 0)
+      } else {
+        log.error('api.request_failed', entry)
+      }
       throw new ApiError(failure, requestId)
     }
 

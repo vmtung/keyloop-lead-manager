@@ -16,8 +16,8 @@ const lead = {
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
-function apiWith(fetchImpl: typeof fetch, timeoutMs = 10_000) {
-  return createApi({ fetch: fetchImpl, timeoutMs, baseUrl: '/api' })
+function apiWith(fetchImpl: typeof fetch, timeoutMs = 10_000, isUnloading = () => false) {
+  return createApi({ fetch: fetchImpl, timeoutMs, baseUrl: '/api', isUnloading })
 }
 
 async function failureOf(promise: Promise<unknown>) {
@@ -109,6 +109,8 @@ describe('failures become typed ApiErrors', () => {
       throw new TypeError('Failed to fetch')
     })
     expect(await failureOf(api.listLeads())).toEqual({ kind: 'network' })
+    await new Promise((r) => setTimeout(r, 10))
+    expect(console.error).toHaveBeenCalledOnce() // still logged when the page stays
   })
 
   test('AC-7.2: a request slower than the timeout is a timeout failure', async () => {
@@ -119,6 +121,22 @@ describe('failures become typed ApiErrors', () => {
       })
     const api = apiWith(neverAnswers, 20)
     expect(await failureOf(api.listLeads())).toEqual({ kind: 'timeout' })
+  })
+
+  test('requests cut off by the page unloading are not logged (the abort lands before pagehide)', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let unloading = false
+    const api = apiWith(
+      async () => {
+        throw new TypeError('Failed to fetch')
+      },
+      10_000,
+      () => unloading,
+    )
+    expect(await failureOf(api.listLeads())).toEqual({ kind: 'network' })
+    unloading = true // pagehide fires after the rejection
+    await new Promise((r) => setTimeout(r, 10))
+    expect(logged).not.toHaveBeenCalled()
   })
 
   test('a caller cancelling is not reported as a failure', async () => {
