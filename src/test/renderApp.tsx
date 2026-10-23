@@ -5,6 +5,7 @@ import { render } from '@testing-library/react'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { createApp } from '../../server/app.ts'
 import { seed } from '../../server/seed.ts'
@@ -17,6 +18,8 @@ import { LiveUpdatesProvider } from '../leads/live.tsx'
 
 interface Options {
   route?: string
+  /** Rendered beside the app, inside the same providers (e.g. the demo tools). */
+  extra?: ReactNode
   data?: (seeded: Data) => Data
   /** Runs before the first render, e.g. to make the first requests fail. */
   network?: (network: Network) => void
@@ -46,7 +49,7 @@ export class Network {
   }
 }
 
-export async function renderApp({ route = '/leads', data = (d) => d, network: setup }: Options = {}) {
+export async function renderApp({ route = '/leads', data = (d) => d, network: setup, extra }: Options = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'lead-ui-'))
   // Seeded relative to this render, so "Overdue · 38 min" stays 38 however long the run has taken.
   const store = await openStore(join(dir, 'db.json'), () => data(seed(new Date())))
@@ -85,6 +88,7 @@ export async function renderApp({ route = '/leads', data = (d) => d, network: se
               <CurrentUserProvider>
                 <LiveUpdatesProvider createSource={live.create}>
                   <App />
+                  {extra}
                 </LiveUpdatesProvider>
               </CurrentUserProvider>
             </AnnouncerProvider>
@@ -124,6 +128,8 @@ type Source = EventSourceLike & { readyState: number; dispatch: (type: string) =
 export class LiveStream {
   private source: Source | null = null
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  /** Set when the test ends the stream itself (drop, close), as opposed to the server closing it. */
+  private endedByClient = false
   private readonly open: (url: string) => Promise<Response>
   private url = ''
 
@@ -145,6 +151,7 @@ export class LiveStream {
       dispatch: (type: string) => listeners.get(type)?.forEach((l) => l()),
       close: () => {
         source.readyState = 2
+        this.endedByClient = true
         void this.reader?.cancel()
       },
     } as unknown as Source
@@ -155,6 +162,7 @@ export class LiveStream {
 
   drop() {
     const source = this.source!
+    this.endedByClient = true
     void this.reader?.cancel()
     source.readyState = 0 // CONNECTING: the browser would retry by itself
     source.onerror?.(new Event('error'))
@@ -169,6 +177,7 @@ export class LiveStream {
     const response = await this.open(this.url)
     const reader = response.body!.getReader()
     this.reader = reader
+    this.endedByClient = false
     source.readyState = 1
     source.onopen?.(new Event('open'))
 
@@ -176,7 +185,15 @@ export class LiveStream {
     let buffer = ''
     for (;;) {
       const { value, done } = await reader.read().catch(() => ({ value: undefined, done: true }))
-      if (done) return
+      if (done) {
+        // The server closed the stream: like a browser, report the error and reconnect shortly.
+        if (!this.endedByClient && source.readyState !== 2) {
+          source.readyState = 0
+          source.onerror?.(new Event('error'))
+          setTimeout(() => void this.connect(), 20)
+        }
+        return
+      }
       buffer += decoder.decode(value, { stream: true })
       const frames = buffer.split('\n\n')
       buffer = frames.pop() ?? ''

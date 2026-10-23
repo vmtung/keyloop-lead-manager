@@ -51,13 +51,14 @@ pnpm dev
 
 The app is at http://localhost:5173, and the mock API on port 8787. Both start together.
 
-While it is running, post a website enquiry and watch it arrive:
+In development, the cog in the bottom-right corner opens **Demo tools**: simulate a new website
+lead, have a teammate call or claim the next lead, drop the live connection, switch the API between
+normal, slow and flaky, or reset the sample data. Production builds leave it out. The same things
+work from the command line:
 
 ```bash
 pnpm simulate:lead
 ```
-
-To see the error handling, start the API slow and failing half its requests:
 
 ```bash
 MOCK_LATENCY_MS=1500-2500 MOCK_FAILURE_RATE=0.5 pnpm dev
@@ -90,7 +91,7 @@ Jaeger with `pnpm traces:down`. Normal mode needs no Docker and sends no traces.
 pnpm test
 ```
 
-163 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+176 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
@@ -184,5 +185,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-163 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+176 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

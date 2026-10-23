@@ -4,6 +4,9 @@ import type { z } from 'zod'
 import {
   type ApiErrorCode,
   ApiErrorResponse,
+  CreateLeadResponse,
+  DevFaults,
+  DropStreamsResponse,
   CreateActivityResponse,
   LeadDetailResponse,
   type LeadId,
@@ -42,7 +45,7 @@ interface ApiOptions {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   body?: unknown
   userId?: UserId
   signal?: AbortSignal | undefined
@@ -122,6 +125,19 @@ export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false
       request(`/leads/${leadId}/claim`, LeadResponse, { method: 'POST', userId }),
     releaseLead: (leadId: LeadId, userId: UserId) =>
       request(`/leads/${leadId}/claim`, LeadResponse, { method: 'DELETE', userId }),
+    /**
+     * The mock server's dev endpoints, for the demo tools. Development builds only: Vite replaces
+     * import.meta.env.DEV with false in production, so none of this ships.
+     */
+    dev: import.meta.env.DEV
+      ? {
+          simulateLead: () => request('/dev/leads', CreateLeadResponse, { method: 'POST' }),
+          reset: () => request('/dev/reset', LeadListResponse, { method: 'POST' }),
+          dropStreams: () => request('/dev/drop-streams', DropStreamsResponse, { method: 'POST' }),
+          getFaults: () => request('/dev/faults', DevFaults),
+          setFaults: (faults: DevFaults) => request('/dev/faults', DevFaults, { method: 'PUT', body: faults }),
+        }
+      : undefined,
   }
 }
 

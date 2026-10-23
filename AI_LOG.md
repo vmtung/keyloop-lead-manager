@@ -271,3 +271,20 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   figures' loading placeholder was 4 px shorter than the loaded values. Fixed with exact heights.
 - **Verified:** 163 tests, both e2e tests, axe with no violations at desktop and phone widths, and
   impeccable's detector clean.
+
+## 14. Demo tools panel
+
+- **Ask:** A cog button in the bottom-right corner with the simulate actions, so the demo doesn't
+  need the command line.
+- **AI output:** dev endpoints on the mock server (new lead, reset, drop streams, read and change
+  faults), exempt from fault injection so a flaky API can always be switched back; a panel with a
+  new website lead, a teammate's call and claim on the next lead, dropping the live connection,
+  the API mode, and reset. Specced in the API contract, tests first for the endpoints.
+- **Development builds only:** the panel loads behind `import.meta.env.DEV`. Scanning the
+  production bundle found the API client's dev methods still in it; they were moved behind the
+  same check, and the rescan came back clean.
+- **Test harness gap found:** the test version of `EventSource` did nothing when the *server*
+  closed a stream, unlike a browser, which reports an error and reconnects. Fixed, then checked
+  by disabling the server's drop: the test failed.
+- **Verified in the browser:** "Reconnecting…" 52 ms after a drop and "Live" again about 3 s
+  later, instead of the 35-second watchdog wait. The video script's demo now uses the panel.

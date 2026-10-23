@@ -133,3 +133,15 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('activity.created'), leadId: LeadId, activityId: ActivityId }),
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>
+
+// Dev endpoints (mock server only): the demo tools change these at runtime.
+
+export const DevFaults = z
+  .object({
+    latencyMs: z.object({ min: z.int().nonnegative(), max: z.int().nonnegative() }),
+    failureRate: z.number().min(0).max(1),
+  })
+  .refine((f) => f.latencyMs.max >= f.latencyMs.min, { message: 'latencyMs.max must be >= min' })
+export type DevFaults = z.infer<typeof DevFaults>
+
+export const DropStreamsResponse = z.object({ dropped: z.int().nonnegative() })

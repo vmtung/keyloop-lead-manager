@@ -77,6 +77,19 @@ sends a comment line, so proxies release the response headers. Every 15 seconds 
 `ping` event (not part of `ServerEvent`); the client treats 35 seconds of silence as a dropped
 connection, because a dead connection behind a proxy can look open.
 
+## Dev endpoints (demo tools)
+
+The mock server only; the demo tools panel in development builds calls them. They are exempt from
+fault injection, so a flaky API can always be switched back to normal.
+
+| Method and path | Request | Success |
+|---|---|---|
+| `GET /dev/faults` | | 200 `DevFaults`: the current latency and failure rate |
+| `PUT /dev/faults` | `DevFaults` | 200 `DevFaults`; 400 `validation_failed` |
+| `POST /dev/leads` | | 201 `CreateLeadResponse`: a sample website enquiry, announced as `lead.created` |
+| `POST /dev/reset` | | 200 `LeadListResponse`: the sample data again, with fresh timers |
+| `POST /dev/drop-streams` | | 200 `DropStreamsResponse`: closes every live event stream, so clients reconnect |
+
 ## Mock server fault injection
 
 Set through env vars when starting the mock server. They apply to every `/api` route except

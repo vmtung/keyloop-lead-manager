@@ -80,6 +80,7 @@ proxy matters: two of the live-update bugs lived in it (section 6).
 | Screens | `src/leads/*.tsx`, `src/App.tsx` | Inbox with its speed-to-lead figures and a clock bar per waiting lead; "Next up" when no lead is open; lead detail with the wait as its headline and Call as its primary action; claim line, activity timeline, composer. Two-pane on desktop, one pane at a time on a phone. |
 | Observability | `src/observability/`, `src/app/ErrorBoundary.tsx` | Structured logs with session and user, Web Vitals, error boundaries, global error handlers, log shipping. |
 | Mock API | `server/` | REST, SSE, log intake, idempotent writes, conditional claims, fault injection, JSON-file persistence. |
+| Demo tools | `src/dev/` | Development builds only: a panel that triggers the mock's simulations (new lead, a teammate's call or claim, a dropped connection, API mode, reset) through dev endpoints. Vite drops it and the client's dev methods from production builds. |
 
 ## 3. Data model
 
@@ -311,8 +312,8 @@ What changes past this scale (assumption A7: tens to low hundreds of open leads 
 | Level | Count | What it covers |
 |---|---|---|
 | Unit | 91 | SLA boundaries, suggestion rules, response time, inbox order, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
-| Server | 41 | Every endpoint and error code, idempotency, claims including two at once, trace propagation, persistence, fault injection, SSE framing, log intake |
-| Integration | 31 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race and using a suggestion |
+| Server | 48 | Every endpoint and error code, idempotency, claims including two at once, trace propagation, persistence, fault injection, SSE framing, log intake |
+| Integration | 37 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race, using a suggestion, and the demo tools |
 | End-to-end | 2 | A lead arrives live, a call is logged, and it survives a reload, in Chrome, through the real proxy and SSE stream; and the list doesn't move when data replaces the loading skeleton |
 
 Test names cite acceptance criteria (`AC-4.4: …`). Several tests were checked by breaking the code

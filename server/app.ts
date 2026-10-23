@@ -2,7 +2,7 @@
 // app.request() and inject the store, clock, randomness and logger.
 import { context, propagation, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import { Hono, type MiddlewareHandler } from 'hono'
-import { streamSSE } from 'hono/streaming'
+import { type SSEStreamingApi, streamSSE } from 'hono/streaming'
 import type { z } from 'zod'
 import {
   type ApiErrorCode,
@@ -10,6 +10,8 @@ import {
   ClientLogBatch,
   CreateActivityResponse,
   CreateLeadResponse,
+  DevFaults,
+  DropStreamsResponse,
   type IsoDateTime,
   LeadDetailResponse,
   LeadId,
@@ -22,12 +24,11 @@ import {
   UserListResponse,
 } from '../src/contract.ts'
 import { suggestNextAction } from '../src/domain/suggest.ts'
+import { LEAD_SAMPLES } from './samples.ts'
+import { seed } from './seed.ts'
 import { appendActivity, claimLead, createLead, releaseLead, type Store } from './store.ts'
 
-export interface Faults {
-  latencyMs: { min: number; max: number }
-  failureRate: number
-}
+export type Faults = DevFaults
 
 export type Log = (entry: Record<string, unknown>) => void
 
@@ -50,6 +51,10 @@ export function createApp(deps: AppDeps) {
   const nowIso = () => now().toISOString() as IsoDateTime
 
   const listeners = new Set<Listener>()
+  // Open event streams, so the demo tools can drop them to show a reconnect.
+  const streams = new Set<SSEStreamingApi>()
+  // Starts from env (server/config.ts); the demo tools can change it at runtime.
+  let faults: Faults = deps.faults
   // Tracing goes through the OpenTelemetry API, which does nothing until traced mode registers an
   // SDK (server/tracing.ts). So tests and `pnpm dev` run the same code and record nothing.
   const tracer = trace.getTracer('lead-manager-api')
@@ -122,12 +127,15 @@ export function createApp(deps: AppDeps) {
 
   // Latency and failures on every data endpoint; never on /health or the event stream.
   const injectFaults: MiddlewareHandler = async (c, next) => {
-    if (['/api/health', '/api/events', '/api/logs'].includes(c.req.path)) return next()
-    const { min, max } = deps.faults.latencyMs
+    // Dev endpoints too, so a flaky API can always be switched back to normal.
+    if (['/api/health', '/api/events', '/api/logs'].includes(c.req.path) || c.req.path.startsWith('/api/dev/')) {
+      return next()
+    }
+    const { min, max } = faults.latencyMs
     const delay = min + random() * (max - min)
     // Its own span, so a trace shows the wait as the mock's doing, not the handler's.
     if (delay > 0) await traced('mock.injected_latency', () => new Promise((r) => setTimeout(r, delay)))
-    if (random() < deps.faults.failureRate) {
+    if (random() < faults.failureRate) {
       return c.json(error('internal', 'Injected failure (MOCK_FAILURE_RATE)'), 500)
     }
     await next()
@@ -154,9 +162,11 @@ export function createApp(deps: AppDeps) {
         void stream.writeSSE({ data: JSON.stringify(event) })
       }
       listeners.add(listener)
+      streams.add(stream)
       // Registered before the first await: a client that drops during it must still be removed.
       stream.onAbort(() => {
         listeners.delete(listener)
+        streams.delete(stream)
       })
       // Send bytes at once: proxies (Vite's in dev, nginx in production) hold the response, and
       // with it the browser's `open` event, until the first body chunk arrives.
@@ -171,6 +181,44 @@ export function createApp(deps: AppDeps) {
   )
 
   app.use(injectFaults)
+
+  // Dev endpoints for the demo tools (specs/api-contract.md). The mock server only.
+  app.get('/dev/faults', (c) => c.json(send(DevFaults, faults)))
+
+  app.put('/dev/faults', async (c) => {
+    const body = DevFaults.safeParse(await readJson(c.req.raw))
+    if (!body.success) return c.json(error('validation_failed', body.error.message), 400)
+    faults = body.data
+    deps.log({ level: 'info', message: 'Faults changed by demo tools', faults })
+    return c.json(send(DevFaults, faults))
+  })
+
+  app.post('/dev/leads', async (c) => {
+    const sample = LEAD_SAMPLES[Math.floor(random() * LEAD_SAMPLES.length)]!
+    const lead = await update((data) => {
+      const next = createLead(data, sample, newId() as LeadId, nowIso())
+      return { data: next.data, value: next.lead }
+    })
+    emit({ type: 'lead.created', leadId: lead.id })
+    return c.json(send(CreateLeadResponse, { lead }), 201)
+  })
+
+  app.post('/dev/reset', async (c) => {
+    const data = await update(() => {
+      const fresh = seed(now())
+      return { data: fresh, value: fresh }
+    })
+    return c.json(send(LeadListResponse, { leads: data.leads }))
+  })
+
+  app.post('/dev/drop-streams', (c) => {
+    const open = [...streams]
+    for (const stream of open) {
+      stream.abort() // runs onAbort: the listener goes
+      void stream.close() // ends the response, so the browser sees the drop at once
+    }
+    return c.json(send(DropStreamsResponse, { dropped: open.length }))
+  })
 
   app.get('/users', (c) =>
     c.json(send(UserListResponse, { users: deps.store.read().users })),

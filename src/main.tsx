@@ -2,7 +2,7 @@ import '@fontsource-variable/geist'
 import './styles/tokens.css'
 import './styles/app.css'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { StrictMode } from 'react'
+import { lazy, StrictMode, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { browserFetch } from './api/browserFetch.ts'
@@ -29,6 +29,10 @@ const api = createApi({
   isUnloading: isPageUnloading,
 })
 
+// Development builds only: Vite replaces import.meta.env.DEV with false in production, so this
+// branch and the demo tools chunk are dropped from the production build.
+const DemoTools = import.meta.env.DEV ? lazy(() => import('./dev/DemoTools.tsx')) : null
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: (count, error) => count < 2 && isRetryable(error) },
@@ -47,6 +51,11 @@ createRoot(document.getElementById('root')!).render(
               <CurrentUserProvider>
                 <LiveUpdatesProvider>
                   <App />
+                  {DemoTools && (
+                    <Suspense fallback={null}>
+                      <DemoTools />
+                    </Suspense>
+                  )}
                 </LiveUpdatesProvider>
               </CurrentUserProvider>
             </AnnouncerProvider>

@@ -6,6 +6,9 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import {
   ApiErrorResponse,
   CreateActivityResponse,
+  CreateLeadResponse,
+  DevFaults,
+  DropStreamsResponse,
   LeadResponse,
   LeadDetailResponse,
   LeadListResponse,
@@ -401,5 +404,66 @@ describe('events', () => {
     const event = ServerEvent.parse(JSON.parse(text.replace(/^data: /, '').trim()))
     expect(event.type).toBe('lead.created')
     await reader.cancel()
+  })
+})
+
+describe('dev endpoints (demo tools)', () => {
+  const json = (method: string, body?: unknown) => ({
+    method,
+    headers: { 'content-type': 'application/json' },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  })
+
+  test('faults can be read and changed at runtime, and take effect on the next request', async () => {
+    const { app } = await setup()
+    expect(DevFaults.parse(await (await app.request('/api/dev/faults')).json())).toEqual(NO_FAULTS)
+
+    const flaky = { latencyMs: { min: 0, max: 0 }, failureRate: 1 }
+    const res = await app.request('/api/dev/faults', json('PUT', flaky))
+    expect(DevFaults.parse(await res.json())).toEqual(flaky)
+    expect((await app.request('/api/leads')).status).toBe(500)
+  })
+
+  test('dev endpoints ignore fault injection, so a flaky API can be switched back', async () => {
+    const { app } = await setup({ ...NO_FAULTS, failureRate: 1 })
+    const res = await app.request('/api/dev/faults', json('PUT', NO_FAULTS))
+    expect(res.status).toBe(200)
+    expect((await app.request('/api/leads')).status).toBe(200)
+  })
+
+  test.each([
+    [{ latencyMs: { min: 500, max: 100 }, failureRate: 0 }],
+    [{ latencyMs: { min: 0, max: 0 }, failureRate: 2 }],
+  ])('rejects invalid faults %o', async (faults) => {
+    const { app } = await setup()
+    expect((await app.request('/api/dev/faults', json('PUT', faults))).status).toBe(400)
+  })
+
+  test('a simulated website lead is created and announced', async () => {
+    const { app, store } = await setup()
+    const before = store.read().leads.length
+    const res = await app.request('/api/dev/leads', json('POST'))
+    expect(res.status).toBe(201)
+    const { lead } = CreateLeadResponse.parse(await res.json())
+    expect(lead).toMatchObject({ firstResponseAt: null, claim: null, receivedAt: NOW.toISOString() })
+    expect(store.read().leads).toHaveLength(before + 1)
+  })
+
+  test('reset puts the sample data back', async () => {
+    const { app, store } = await setup()
+    await app.request('/api/dev/leads', json('POST'))
+    const res = await app.request('/api/dev/reset', json('POST'))
+    expect(res.status).toBe(200)
+    expect(store.read().leads.map((l) => l.id).sort()).toEqual(seed(NOW).leads.map((l) => l.id).sort())
+  })
+
+  test('dropping streams closes every open event stream', async () => {
+    const { app } = await setup()
+    const reader = (await app.request('/api/events')).body!.getReader()
+    await reader.read() // ": connected"
+
+    const res = await app.request('/api/dev/drop-streams', json('POST'))
+    expect(DropStreamsResponse.parse(await res.json()).dropped).toBe(1)
+    expect((await reader.read()).done).toBe(true)
   })
 })
