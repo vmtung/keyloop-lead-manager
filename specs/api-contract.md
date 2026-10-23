@@ -50,8 +50,10 @@ data: {"type":"activity.created","leadId":"…","activityId":"…"}
 ```
 
 Events carry IDs only. The client refetches the affected queries (ADR-002). There is no replay of
-missed events: after a reconnect the client refetches everything it has cached (AC-5.3). The server
-sends a comment line every 15 seconds to keep proxies from closing the connection.
+missed events: after a reconnect the client refetches everything it has cached (AC-5.3). On connect the server
+sends a comment line, so proxies release the response headers. Every 15 seconds it sends a named
+`ping` event (not part of `ServerEvent`); the client treats 35 seconds of silence as a dropped
+connection, because a dead connection behind a proxy can look open.
 
 ## Mock server fault injection
 

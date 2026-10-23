@@ -83,3 +83,27 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   500s, then a 201, one activity stored, and client and server logs matched by request ID.
 - **Kept against a design-lint finding:** `example.com` emails. RFC 2606 reserves the domain so
   fictional data can never reach a real inbox.
+
+## 5. Stage 3: live updates
+
+- **Ask:** New leads appear live, another salesperson's activity shows up, and a dropped connection
+  recovers and catches up (AC-5.1–5.3).
+- **AI output:** `subscribeToEvents` at the API boundary (events parsed against the contract,
+  reconnect with backoff, a status for the UI), and a provider that turns thin events into cache
+  invalidations, a screen-reader announcement and a brief highlight. For tests, an `EventSource`
+  that reads the in-process server's real SSE stream, so the server's emit, the wire format and the
+  UI are tested together.
+- **Verified:** tests first for the subscription (red, then green); mutation checks on the resume
+  refetch and on lead events (both caught). In the browser: a simulated lead appeared and was
+  announced; an activity logged in one tab showed in a second tab; with the API killed and
+  restarted, the UI said so and recovered by itself.
+- **Caught by running it in a real browser, missed by every test:**
+  - The indicator stuck on "Connecting…": Vite's proxy held the stream's headers until the first
+    body bytes, 15 seconds later. The server now writes a comment the moment a stream opens.
+  - With the API killed, both tabs still said "Live": the proxy kept the browser's side of a dead
+    connection open, with no error event. The keep-alive was an SSE comment, which scripts never
+    see. It is now a named `ping` event, and a client watchdog treats 35 seconds of silence as a
+    drop. Re-tested: "Reconnecting…" after 35 s, back to "Live" 8 s after the restart.
+- **Why it matters:** the in-process tests skip the proxy hop, which is exactly where both bugs
+  lived. That is the case for the Playwright test in Stage 5, and for checking what the AI built in
+  the real environment rather than trusting green tests.

@@ -202,3 +202,65 @@ describe('keyboard', () => {
     expect(input).toHaveValue('jkc')
   })
 })
+
+describe('live updates', () => {
+  const ELLIE = {
+    customer: { name: 'Ellie Turner', email: 'ellie.turner@example.com', phone: '07700 900905' },
+    enquiryType: 'test_drive',
+    message: 'Can I book a test drive this week?',
+    vehicle: null,
+  }
+
+  test('AC-5.1: a new lead appears without a reload, highlighted and announced', async () => {
+    const { postLead } = await renderApp()
+    await screen.findByText('Hannah Okafor')
+    expect(await screen.findByText('Live')).toBeInTheDocument()
+
+    expect((await postLead(ELLIE)).status).toBe(201)
+
+    const row = (await within(region('Awaiting response')).findByText('Ellie Turner')).closest('a')
+    expect(row).toHaveClass('lead-row--new')
+    await waitFor(() =>
+      expect(screen.getByRole('status')).toHaveTextContent('New lead from Ellie Turner: Test drive.'),
+    )
+  })
+
+  test('AC-5.2: an activity another salesperson logs shows up in the open lead', async () => {
+    const { server } = await renderApp({ route: `/leads/${LEADS.oliviaAwaiting3min}` })
+    await screen.findByText('No follow-ups yet. Log the first one below.')
+    await screen.findByText('Live')
+
+    await server.fetch(
+      new Request(`http://test/api/leads/${LEADS.oliviaAwaiting3min}/activities`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-user-id': 'tom' },
+        body: JSON.stringify({ id: crypto.randomUUID(), type: 'call', summary: 'Booked Saturday 10:00' }),
+      }),
+    )
+
+    const entry = (await screen.findByText('Booked Saturday 10:00')).closest('li')
+    expect(entry).toHaveTextContent('by Tom Hughes')
+    // The lead was contacted by Tom, so the inbox moves it too.
+    await waitFor(() => expect(rowNames(region('Contacted'))).toContain('Olivia Bennett'))
+  })
+
+  test('AC-5.3: a dropped connection says so, and on reconnect refetches what was missed', async () => {
+    const { live, postLead } = await renderApp()
+    await screen.findByText('Hannah Okafor')
+    await screen.findByText('Live')
+
+    act(() => live.drop())
+    expect(screen.getByText('Reconnecting…')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Live updates paused. Reconnecting.')
+
+    await postLead(ELLIE) // emitted while we're disconnected: this event is lost
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.queryByText('Ellie Turner')).not.toBeInTheDocument()
+
+    await act(async () => {
+      void live.reconnect()
+    })
+    expect(await screen.findByText('Ellie Turner')).toBeInTheDocument()
+    expect(screen.getByText('Live')).toBeInTheDocument()
+  })
+})

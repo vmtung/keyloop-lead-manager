@@ -9,6 +9,7 @@ import { createApi } from './api/client.ts'
 import { isRetryable } from './api/describeFailure.ts'
 import App from './App.tsx'
 import { AnnouncerProvider, ApiProvider, CurrentUserProvider, NowProvider } from './app/context.tsx'
+import { LiveUpdatesProvider } from './leads/live.tsx'
 
 const api = createApi({ fetch: window.fetch.bind(window), baseUrl: '/api', timeoutMs: 10_000 })
 
@@ -27,7 +28,9 @@ createRoot(document.getElementById('root')!).render(
           <NowProvider>
             <AnnouncerProvider>
               <CurrentUserProvider>
-                <App />
+                <LiveUpdatesProvider>
+                  <App />
+                </LiveUpdatesProvider>
               </CurrentUserProvider>
             </AnnouncerProvider>
           </NowProvider>

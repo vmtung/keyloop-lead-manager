@@ -32,7 +32,7 @@ afterEach(async () => {
   await rm(dir, { recursive: true, force: true })
 })
 
-async function setup(faults: Faults = NO_FAULTS, random = () => 0.5) {
+async function setup(faults: Faults = NO_FAULTS, random = () => 0.5, keepAliveMs = 60_000) {
   const store = await openStore(file, () => seed(NOW))
   const app = createApp({
     store,
@@ -40,7 +40,7 @@ async function setup(faults: Faults = NO_FAULTS, random = () => 0.5) {
     random,
     log: (entry) => logs.push(entry),
     now: () => NOW,
-    keepAliveMs: 10,
+    keepAliveMs,
   })
   return { app, store }
 }
@@ -204,10 +204,24 @@ describe('fault injection', () => {
 })
 
 describe('events', () => {
+  test('a quiet stream sends a named ping, which the client watchdog can hear', async () => {
+    const { app } = await setup(NO_FAULTS, () => 0.5, 10)
+    const reader = (await app.request('/api/events')).body!.getReader()
+    const decoder = new TextDecoder()
+    await reader.read() // ": connected"
+    const ping = decoder.decode((await reader.read()).value)
+    expect(ping).toMatch(/^event: ping\ndata: \S+\n\n$/)
+    await reader.cancel()
+  })
+
   test('a new lead is announced on the event stream', async () => {
     const { app } = await setup()
     const stream = await app.request('/api/events')
     const reader = stream.body!.getReader()
+    const decode = async () => new TextDecoder().decode((await reader.read()).value)
+
+    // Bytes go out at once, so a buffering proxy releases the headers and the browser's open event.
+    expect(await decode()).toBe(': connected\n\n')
 
     const created = await app.request('/api/leads', {
       method: 'POST',
@@ -221,7 +235,7 @@ describe('events', () => {
     })
     expect(created.status).toBe(201)
 
-    const text = new TextDecoder().decode((await reader.read()).value)
+    const text = await decode()
     const event = ServerEvent.parse(JSON.parse(text.replace(/^data: /, '').trim()))
     expect(event.type).toBe('lead.created')
     await reader.cancel()

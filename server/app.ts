@@ -90,12 +90,17 @@ export function createApp(deps: AppDeps) {
         void stream.writeSSE({ data: JSON.stringify(event) })
       }
       listeners.add(listener)
+      // Send bytes at once: proxies (Vite's in dev, nginx in production) hold the response, and
+      // with it the browser's `open` event, until the first body chunk arrives.
+      await stream.write(': connected\n\n')
       stream.onAbort(() => {
         listeners.delete(listener)
       })
       while (!stream.aborted) {
         await stream.sleep(deps.keepAliveMs ?? 15_000)
-        if (!stream.aborted) await stream.write(': keep-alive\n\n')
+        // A named event, not a comment: browsers hide comments from scripts, and the client's
+        // watchdog needs to hear something to know a quiet connection is still alive.
+        if (!stream.aborted) await stream.writeSSE({ event: 'ping', data: nowIso() })
       }
     }),
   )

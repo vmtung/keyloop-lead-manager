@@ -6,6 +6,7 @@ import { formatDuration, formatWhen } from '../domain/format.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
 import { SLA, sortForInbox, speedToLead } from '../domain/speedToLead.ts'
 import { useLeads } from './queries.ts'
+import { useLive } from './live.tsx'
 import { SpeedToLeadPill } from './SpeedToLeadStatus.tsx'
 
 /** The page's h1 belongs to the main view: "Leads" here, the customer's name when a lead is open. */
@@ -80,13 +81,14 @@ function LeadGroup(props: { title: string; leads: Lead[]; selectedId: LeadId | u
 
 function LeadRow({ lead, selected, now }: { lead: Lead; selected: boolean; now: number }) {
   const awaiting = lead.firstResponseAt === null
+  const fresh = useLive().fresh.has(lead.id)
   const subject = lead.vehicle
     ? `${ENQUIRY_LABEL[lead.enquiryType]} · ${lead.vehicle.make} ${lead.vehicle.model}`
     : ENQUIRY_LABEL[lead.enquiryType]
   return (
     <Link
       to={`/leads/${lead.id}`}
-      className={`lead-row${awaiting ? ' lead-row--awaiting' : ''}`}
+      className={`lead-row${awaiting ? ' lead-row--awaiting' : ''}${fresh ? ' lead-row--new' : ''}`}
       aria-current={selected ? 'page' : undefined}
       data-lead-link
     >

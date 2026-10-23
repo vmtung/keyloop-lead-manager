@@ -38,5 +38,11 @@ caches, which refetch.
   is simple and correct; at higher volume we would add event IDs and `Last-Event-ID` replay.
 - One open connection per tab. Browsers limit HTTP/1.1 connections per host to six, so many tabs
   could starve. HTTP/2 in production removes that limit.
+- Proxies hold a response until its first body bytes, so the server writes an SSE comment the
+  moment a stream opens; without it the browser's `open` event waited for the first keep-alive.
+- A dead connection behind a proxy can look open, with no error event. The server sends a named
+  `ping` every 15 seconds (a comment would be invisible to scripts), and the client treats 35
+  seconds of silence as a drop: it says so, reconnects with backoff, and refetches. Both were found
+  by running the app through Vite's proxy, not by the in-process tests.
 - In production the stream would sit behind the same gateway and auth as the API, fed by the lead
   service's event bus rather than an in-process emitter.

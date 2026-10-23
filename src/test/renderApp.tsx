@@ -11,7 +11,9 @@ import { seed } from '../../server/seed.ts'
 import { type Data, openStore } from '../../server/store.ts'
 import { createApi } from '../api/client.ts'
 import App from '../App.tsx'
+import type { EventSourceLike } from '../api/events.ts'
 import { AnnouncerProvider, ApiProvider, CurrentUserProvider, NowProvider } from '../app/context.tsx'
+import { LiveUpdatesProvider } from '../leads/live.tsx'
 
 export const NOW = new Date()
 
@@ -64,6 +66,8 @@ export async function renderApp({ route = '/leads', data = (d) => d, network: se
     return server.fetch(new Request(new URL(url, 'http://test'), init))
   }
 
+  const live = new LiveStream(async (url) => server.fetch(new Request(new URL(url, 'http://test'))))
+
   const api = createApi({ fetch: fetchThroughServer, baseUrl: '/api', timeoutMs: 5_000 })
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -76,7 +80,9 @@ export async function renderApp({ route = '/leads', data = (d) => d, network: se
           <NowProvider>
             <AnnouncerProvider>
               <CurrentUserProvider>
-                <App />
+                <LiveUpdatesProvider createSource={live.create}>
+                  <App />
+                </LiveUpdatesProvider>
               </CurrentUserProvider>
             </AnnouncerProvider>
           </NowProvider>
@@ -84,7 +90,17 @@ export async function renderApp({ route = '/leads', data = (d) => d, network: se
       </ApiProvider>
     </QueryClientProvider>,
   )
-  return { ...utils, store, network, queryClient }
+  /** Posts a website enquiry to the server, as the website would (specs A17). */
+  const postLead = (body: unknown) =>
+    server.fetch(
+      new Request('http://test/api/leads', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+    )
+
+  return { ...utils, store, network, queryClient, live, server, postLead }
 }
 
 /** Seeded IDs (server/seed.ts). */
@@ -93,4 +109,87 @@ export const LEADS = {
   marcusAtRisk12min: '00000000-0000-4000-8000-000000000002',
   hannahOverdue38min: '00000000-0000-4000-8000-000000000003',
   aishaContacted: '00000000-0000-4000-8000-000000000005',
+}
+
+/**
+ * An EventSource that reads the in-process server's real /api/events stream and parses the SSE
+ * wire format, so live-update tests cover the server's emit, the format and the client together.
+ * `drop()` simulates a lost connection; `reconnect()` is the browser retrying.
+ */
+type Source = EventSourceLike & { readyState: number; dispatch: (type: string) => void }
+
+export class LiveStream {
+  private source: Source | null = null
+  private reader: ReadableStreamDefaultReader<Uint8Array> | null = null
+  private readonly open: (url: string) => Promise<Response>
+  private url = ''
+
+  constructor(open: (url: string) => Promise<Response>) {
+    this.open = open
+  }
+
+  readonly create = (url: string): EventSourceLike => {
+    this.url = url
+    const listeners = new Map<string, (() => void)[]>()
+    const source = {
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      readyState: 0,
+      addEventListener: (type: string, listener: () => void) => {
+        listeners.set(type, [...(listeners.get(type) ?? []), listener])
+      },
+      dispatch: (type: string) => listeners.get(type)?.forEach((l) => l()),
+      close: () => {
+        source.readyState = 2
+        void this.reader?.cancel()
+      },
+    } as unknown as Source
+    this.source = source
+    void this.connect()
+    return source
+  }
+
+  drop() {
+    const source = this.source!
+    void this.reader?.cancel()
+    source.readyState = 0 // CONNECTING: the browser would retry by itself
+    source.onerror?.(new Event('error'))
+  }
+
+  reconnect() {
+    return this.connect()
+  }
+
+  private async connect() {
+    const source = this.source!
+    const response = await this.open(this.url)
+    const reader = response.body!.getReader()
+    this.reader = reader
+    source.readyState = 1
+    source.onopen?.(new Event('open'))
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+    for (;;) {
+      const { value, done } = await reader.read().catch(() => ({ value: undefined, done: true }))
+      if (done) return
+      buffer += decoder.decode(value, { stream: true })
+      const frames = buffer.split('\n\n')
+      buffer = frames.pop() ?? ''
+      for (const frame of frames) {
+        const name = frame.match(/^event: (.+)$/m)?.[1]
+        if (name) {
+          source.dispatch(name)
+          continue
+        }
+        const data = frame
+          .split('\n')
+          .filter((line) => line.startsWith('data:'))
+          .map((line) => line.slice(5).trimStart())
+          .join('\n')
+        if (data) source.onmessage?.(new MessageEvent('message', { data }))
+      }
+    }
+  }
 }

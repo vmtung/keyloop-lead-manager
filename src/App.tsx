@@ -5,6 +5,7 @@ import { useShortcuts } from './app/useShortcuts.ts'
 import { LeadId, type UserId } from './contract.ts'
 import { LeadDetail, LeadNotFound } from './leads/LeadDetail.tsx'
 import { LeadInbox } from './leads/LeadInbox.tsx'
+import { LiveIndicator } from './leads/live.tsx'
 
 export default function App() {
   return (
@@ -29,7 +30,10 @@ function Shell() {
           <span className="brand__name">Lead Manager</span>
           <span className="brand__scope">Kingsway Motors, Leeds</span>
         </Link>
-        <UserSwitcher />
+        <div className="topbar__end">
+          <LiveIndicator />
+          <UserSwitcher />
+        </div>
       </header>
       <Outlet />
     </div>
