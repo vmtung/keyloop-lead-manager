@@ -20,3 +20,5 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      # One journey through the real stack (Vite proxy, mock API, SSE) in the runner's Chrome.
+      - run: pnpm test:e2e
