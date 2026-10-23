@@ -128,3 +128,30 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
 - **Also corrected:** the AI first guessed that missing LCP and CLS were a quirk of the background
   browser pane. A later run showed all five vitals arriving, so the guess was wrong, and it was not
   recorded as a finding.
+
+## 7. Stage 5: hardening and review
+
+- **Code review (AI reviewing its own code, 9 findings, all fixed):** the important one was data
+  loss. A save that failed after the salesperson had moved to the next lead disappeared: no error,
+  no announcement, text gone. Failure handling lived in per-call callbacks that don't run once the
+  component unmounts. Failures now live in the mutation cache: announced from anywhere, marked
+  "Not saved" in the inbox, restored with Retry on return (AC-4.8, added to the spec after the fact
+  and said so here). Others: no timeout while the stream was still connecting, an SSE listener leak,
+  raw server text shown to salespeople, a client log field able to overwrite the server timestamp.
+- **Accessibility:** axe-core (injected for the audit, not a dependency) on every view and state,
+  plus a manual keyboard pass. Fixed a skipped heading level, an unnamed user picker on phones,
+  touch targets under 44 px, and added a skip link past the inbox.
+- **End-to-end:** one Playwright journey through the real proxy and SSE stream. Mutation check:
+  removing the server's connect flush (the Stage 3 bug) makes it fail. It first passed locally and
+  failed on CI: locally it had reused my dev server, whose latency hid an ambiguous locator. Then the
+  design screenshots showed its test leads in my dev inbox. Both from the same shortcut; e2e now
+  always starts its own servers on separate ports with a fresh data file.
+- **Design critique:** the screenshots caught the skip link showing at rest, which the keyboard check
+  (focused state only) had passed. Fixed; activity icons lost their tinted circles.
+- **Production numbers:** 132 KB gzipped JS (react-dom 66, zod 26, app 10.5). LCP 330–700 ms on the
+  production build in a visible tab, bound by the mock API's latency, not the bundle. Paint metrics
+  don't report from a hidden tab, which is why the browser pane had shown none: the earlier guess
+  in entry 6 was right after all, for the wrong reason.
+- **Process note:** several bugs this stage passed one kind of check and failed another (unit test
+  vs browser, keyboard vs visual, local vs CI). Checking the same thing from two angles was what
+  caught them.
