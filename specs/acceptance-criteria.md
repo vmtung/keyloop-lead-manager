@@ -76,3 +76,14 @@ AI_LOG).
 | AC-7.4 | Render errors are caught by an error boundary that shows a recovery screen with a reference the user can quote, and logs the error. A failure in the lead pane leaves the inbox working. | integration |
 | AC-7.5 | Web Vitals (LCP, INP, CLS) are reported through the same logger. | manual |
 | AC-7.6 | Client log entries (errors, failed requests, vitals) are batched and sent to `POST /api/logs`, and flushed when the page is hidden. Each carries a session ID and the signed-in user. Failing to send logs never breaks the app or logs in a loop. | unit |
+
+## 8. Claiming a lead
+
+| ID | Criterion | Test |
+|---|---|---|
+| AC-8.1 | An unclaimed lead offers **Claim**. After claiming, the lead shows "You claimed this" with **Release**, and the inbox row shows the owner's name. | integration |
+| AC-8.2 | If someone else claimed the lead first, **Claim** fails without a reload: the lead shows who owns it and "Tom Hughes claimed this lead first." is shown and announced. | integration |
+| AC-8.3 | Claiming a lead you already own changes nothing. | unit (server) |
+| AC-8.4 | Only the owner can release a claim. Releasing an unclaimed lead changes nothing. | unit (server) |
+| AC-8.5 | Logging the first contact attempt on an unclaimed lead claims it for the author. A note does not. | integration |
+| AC-8.6 | A claim or release made elsewhere shows up in an open inbox and lead without a reload. | integration |

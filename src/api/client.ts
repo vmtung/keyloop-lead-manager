@@ -8,6 +8,7 @@ import {
   LeadDetailResponse,
   type LeadId,
   LeadListResponse,
+  LeadResponse,
   type NewActivity,
   type UserId,
   UserListResponse,
@@ -41,7 +42,7 @@ interface ApiOptions {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'DELETE'
   body?: unknown
   userId?: UserId
   signal?: AbortSignal | undefined
@@ -117,6 +118,10 @@ export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false
         body: activity,
         userId,
       }),
+    claimLead: (leadId: LeadId, userId: UserId) =>
+      request(`/leads/${leadId}/claim`, LeadResponse, { method: 'POST', userId }),
+    releaseLead: (leadId: LeadId, userId: UserId) =>
+      request(`/leads/${leadId}/claim`, LeadResponse, { method: 'DELETE', userId }),
   }
 }
 

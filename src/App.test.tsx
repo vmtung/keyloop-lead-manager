@@ -1,6 +1,8 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import { claimLead } from '../server/store.ts'
+import type { IsoDateTime, LeadId, UserId } from './contract.ts'
 import { LEADS, renderApp } from './test/renderApp.tsx'
 
 afterEach(() => {
@@ -297,5 +299,63 @@ describe('live updates', () => {
     })
     expect(await screen.findByText('Ellie Turner')).toBeInTheDocument()
     expect(screen.getByText('Live')).toBeInTheDocument()
+  })
+})
+
+describe('claiming a lead', () => {
+  const OLIVIA = LEADS.oliviaAwaiting3min
+  const oliviaRow = () => within(region('Awaiting response')).getByText('Olivia Bennett').closest('a')!
+
+  test('AC-8.1: claiming shows "You claimed this" with Release, and the owner in the inbox', async () => {
+    await renderApp({ route: `/leads/${OLIVIA}` })
+    await screen.findByText('Unclaimed')
+    await userEvent.click(screen.getByRole('button', { name: 'Claim' }))
+
+    expect(await screen.findByText('You claimed this')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Release' })).toBeInTheDocument()
+    expect(oliviaRow()).toHaveTextContent('You ·')
+    expect(screen.getByRole('status')).toHaveTextContent('You claimed Olivia Bennett.')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Release' }))
+    expect(await screen.findByText('Unclaimed')).toBeInTheDocument()
+  })
+
+  test('AC-8.2: losing the race shows who won, without a reload', async () => {
+    quietErrors()
+    const { store } = await renderApp({ route: `/leads/${OLIVIA}` })
+    await screen.findByText('Unclaimed')
+
+    // Tom claims first, and his claim's event hasn't reached this screen yet.
+    const tom = store.findUser('tom' as UserId)!
+    await store.update((data) => {
+      const next = claimLead(data, OLIVIA as LeadId, tom, new Date().toISOString() as IsoDateTime)
+      return { data: next.data, value: next.result }
+    })
+    await userEvent.click(screen.getByRole('button', { name: 'Claim' }))
+
+    expect(await screen.findByText('Tom Hughes claimed this lead first.', { selector: '.claim__message' })).toBeInTheDocument()
+    expect(screen.getByText('Claimed by Tom Hughes')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Claim' })).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Tom Hughes claimed this lead first.')
+  })
+
+  test('AC-8.5: logging the first call claims the lead', async () => {
+    await renderApp({ route: `/leads/${OLIVIA}` })
+    await screen.findByText('Unclaimed')
+    await userEvent.type(screen.getByLabelText('Summary'), 'Called Olivia')
+    await userEvent.click(screen.getByRole('button', { name: 'Log activity' }))
+    expect(await screen.findByText('You claimed this')).toBeInTheDocument()
+  })
+
+  test('AC-8.6: a claim made elsewhere shows up live', async () => {
+    const { server } = await renderApp({ route: `/leads/${OLIVIA}` })
+    await screen.findByText('Unclaimed')
+    await screen.findByText('Live')
+
+    await server.fetch(
+      new Request(`http://test/api/leads/${OLIVIA}/claim`, { method: 'POST', headers: { 'x-user-id': 'priya' } }),
+    )
+    expect(await screen.findByText('Claimed by Priya Shah')).toBeInTheDocument()
+    await waitFor(() => expect(oliviaRow()).toHaveTextContent('Priya ·'))
   })
 })

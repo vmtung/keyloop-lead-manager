@@ -11,7 +11,7 @@ import type {
   User,
   UserId,
 } from '../src/contract.ts'
-import { firstResponseAt } from '../src/domain/speedToLead.ts'
+import { firstResponseAt, isContactAttempt } from '../src/domain/speedToLead.ts'
 import type { Data } from './store.ts'
 
 export const USERS: User[] = [
@@ -21,7 +21,7 @@ export const USERS: User[] = [
 ]
 const [anna, tom, priya] = USERS as [User, User, User]
 
-type LeadSeed = Omit<Lead, 'id' | 'receivedAt' | 'firstResponseAt'> & {
+type LeadSeed = Omit<Lead, 'id' | 'receivedAt' | 'firstResponseAt' | 'claim'> & {
   minutesAgo: number
   activities?: { type: ActivityType; summary: string; by: User; minutesAfter: number }[]
 }
@@ -136,8 +136,15 @@ export function seed(now: Date = new Date()): Data {
       vehicle: s.vehicle,
       receivedAt: at(received),
       firstResponseAt: firstResponseAt(own),
+      // Contacted leads belong to whoever contacted them first, as the auto-claim rule would do.
+      claim: firstContactClaim(own),
     })
   })
 
   return { users: USERS, leads, activities }
+}
+
+function firstContactClaim(activities: Activity[]): Lead['claim'] {
+  const first = activities.find((a) => isContactAttempt(a.type))
+  return first ? { by: first.author, at: first.occurredAt } : null
 }

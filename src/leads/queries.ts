@@ -4,7 +4,8 @@ import { type Mutation, useMutation, useMutationState, useQuery, useQueryClient 
 import type { z } from 'zod'
 import { describeFailure } from '../api/describeFailure.ts'
 import { useAnnounce, useApi } from '../app/context.tsx'
-import type { LeadDetailResponse, LeadId, LeadListResponse, NewActivity, User } from '../contract.ts'
+import { ApiError } from '../api/client.ts'
+import type { Lead, LeadDetailResponse, LeadId, LeadListResponse, NewActivity, User } from '../contract.ts'
 
 export const leadKeys = {
   all: ['leads'] as const,
@@ -68,9 +69,44 @@ export function useLogActivity(leadId: LeadId) {
             : [...old.activities, activity],
         },
       )
-      queryClient.setQueryData<z.output<typeof LeadListResponse>>(leadKeys.list(), (old) =>
-        old && { leads: old.leads.map((l) => (l.id === lead.id ? lead : l)) },
+      setListLead(queryClient, lead)
+    },
+  })
+}
+
+type QueryClient = ReturnType<typeof useQueryClient>
+
+function setListLead(queryClient: QueryClient, lead: Lead) {
+  queryClient.setQueryData<z.output<typeof LeadListResponse>>(leadKeys.list(), (old) =>
+    old && { leads: old.leads.map((l) => (l.id === lead.id ? lead : l)) },
+  )
+}
+
+export interface ClaimInput {
+  action: 'claim' | 'release'
+  user: User
+}
+
+/** Claim or release a lead (ADR-005). On a 409 the lead is refetched, so the UI shows who won. */
+export function useClaim(leadId: LeadId) {
+  const api = useApi()
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ action, user }: ClaimInput) =>
+      action === 'claim' ? api.claimLead(leadId, user.id) : api.releaseLead(leadId, user.id),
+    onSuccess: ({ lead }) => {
+      queryClient.setQueryData<z.output<typeof LeadDetailResponse>>(leadKeys.detail(leadId), (old) =>
+        old && { ...old, lead },
       )
+      setListLead(queryClient, lead)
+    },
+    onError: async (error) => {
+      if (error instanceof ApiError && error.failure.kind === 'http' && error.failure.status === 409) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: leadKeys.detail(leadId) }),
+          queryClient.invalidateQueries({ queryKey: leadKeys.list() }),
+        ])
+      }
     },
   })
 }

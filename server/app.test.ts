@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest'
 import {
   ApiErrorResponse,
   CreateActivityResponse,
+  LeadResponse,
   LeadDetailResponse,
   LeadListResponse,
   ServerEvent,
@@ -203,6 +204,88 @@ describe('fault injection', () => {
   )
 })
 
+describe('claiming a lead (ADR-005)', () => {
+  const DANIEL_CLAIMED_BY_TOM = '00000000-0000-4000-8000-000000000004'
+  const claim = (app: Awaited<ReturnType<typeof setup>>['app'], leadId: string, user: string | null, method = 'POST') =>
+    app.request(`/api/leads/${leadId}/claim`, {
+      method,
+      headers: user === null ? {} : { 'x-user-id': user },
+    })
+
+  test('AC-8.1: claiming an unclaimed lead makes you the owner', async () => {
+    const { app } = await setup()
+    const res = await claim(app, AWAITING_LEAD, 'anna')
+    expect(res.status).toBe(200)
+    const { lead } = LeadResponse.parse(await res.json())
+    expect(lead.claim).toEqual({ by: { id: 'anna', name: 'Anna Clarke' }, at: NOW.toISOString() })
+  })
+
+  test('AC-8.2: the second claim loses with 409, and the first owner keeps it', async () => {
+    const { app, store } = await setup()
+    await claim(app, AWAITING_LEAD, 'tom')
+    const res = await claim(app, AWAITING_LEAD, 'anna')
+    expect(res.status).toBe(409)
+    expect(ApiErrorResponse.parse(await res.json()).error.code).toBe('claim_conflict')
+    expect(store.read().leads.find((l) => l.id === AWAITING_LEAD)?.claim?.by.id).toBe('tom')
+  })
+
+  test('two claims sent at the same time: exactly one wins', async () => {
+    const { app } = await setup()
+    const [a, b] = await Promise.all([claim(app, AWAITING_LEAD, 'anna'), claim(app, AWAITING_LEAD, 'tom')])
+    expect([a.status, b.status].sort()).toEqual([200, 409])
+  })
+
+  test('AC-8.3: claiming a lead you already own changes nothing', async () => {
+    const { app } = await setup()
+    const first = LeadResponse.parse(await (await claim(app, AWAITING_LEAD, 'anna')).json())
+    const again = await claim(app, AWAITING_LEAD, 'anna')
+    expect(again.status).toBe(200)
+    expect(LeadResponse.parse(await again.json())).toEqual(first)
+  })
+
+  test('AC-8.4: only the owner can release', async () => {
+    const { app } = await setup()
+    const byOther = await claim(app, DANIEL_CLAIMED_BY_TOM, 'anna', 'DELETE')
+    expect(byOther.status).toBe(403)
+    expect(ApiErrorResponse.parse(await byOther.json()).error.code).toBe('forbidden')
+
+    const byOwner = await claim(app, DANIEL_CLAIMED_BY_TOM, 'tom', 'DELETE')
+    expect(byOwner.status).toBe(200)
+    expect(LeadResponse.parse(await byOwner.json()).lead.claim).toBeNull()
+
+    const again = await claim(app, DANIEL_CLAIMED_BY_TOM, 'anna', 'DELETE') // now unclaimed
+    expect(again.status).toBe(200)
+  })
+
+  test.each([
+    ['no user', AWAITING_LEAD, null, 401],
+    ['unknown lead', '00000000-0000-4000-8000-0000000000ff', 'anna', 404],
+  ])('%s → %i', async (_, leadId, user, status) => {
+    const { app } = await setup()
+    expect((await claim(app, leadId, user)).status).toBe(status)
+  })
+
+  test('AC-8.5: the first contact attempt claims an unclaimed lead for its author; a note does not', async () => {
+    const { app } = await setup()
+    const note = await postActivity(app, { id: crypto.randomUUID(), type: 'note', summary: 'Prefers email' }, { user: 'tom' })
+    expect(CreateActivityResponse.parse(await note.json()).lead.claim).toBeNull()
+
+    const call = await postActivity(app, { id: crypto.randomUUID(), type: 'call', summary: 'Called' }, { user: 'tom' })
+    expect(CreateActivityResponse.parse(await call.json()).lead.claim?.by.id).toBe('tom')
+
+    // A later contact by someone else does not take the claim over.
+    const other = await postActivity(app, { id: crypto.randomUUID(), type: 'email', summary: 'Sent brochure' }, { user: 'anna' })
+    expect(CreateActivityResponse.parse(await other.json()).lead.claim?.by.id).toBe('tom')
+  })
+
+  test('the seed gives each contacted lead to whoever contacted it first', async () => {
+    const { store } = await setup()
+    for (const lead of store.read().leads) {
+      expect(lead.claim === null).toBe(lead.firstResponseAt === null)
+    }
+  })
+})
+
 describe('client logs (AC-7.6)', () => {
   const batch = {
     entries: [
@@ -252,6 +335,22 @@ describe('client logs (AC-7.6)', () => {
 })
 
 describe('events', () => {
+  test('AC-8.6: a claim and a release are announced as lead.updated', async () => {
+    const { app } = await setup()
+    const reader = (await app.request('/api/events')).body!.getReader()
+    const next = async () => new TextDecoder().decode((await reader.read()).value)
+    await next() // ": connected"
+
+    await app.request(`/api/leads/${AWAITING_LEAD}/claim`, { method: 'POST', headers: { 'x-user-id': 'anna' } })
+    expect(ServerEvent.parse(JSON.parse((await next()).replace(/^data: /, '')))).toEqual({
+      type: 'lead.updated',
+      leadId: AWAITING_LEAD,
+    })
+    await app.request(`/api/leads/${AWAITING_LEAD}/claim`, { method: 'DELETE', headers: { 'x-user-id': 'anna' } })
+    expect(JSON.parse((await next()).replace(/^data: /, '')).type).toBe('lead.updated')
+    await reader.cancel()
+  })
+
   test('a quiet stream sends a named ping, which the client watchdog can hear', async () => {
     const { app } = await setup(NO_FAULTS, () => 0.5, 10)
     const reader = (await app.request('/api/events')).body!.getReader()

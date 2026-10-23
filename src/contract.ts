@@ -52,6 +52,8 @@ export const Lead = z.object({
   receivedAt: IsoDateTime,
   /** Time of the first contact attempt; null while awaiting response. Set by the server. */
   firstResponseAt: IsoDateTime.nullable(),
+  /** Who has taken the lead on (specs A18). Defaults to null so data files from before claims load. */
+  claim: z.object({ by: User, at: IsoDateTime }).nullable().default(null),
 })
 export type Lead = z.infer<typeof Lead>
 
@@ -79,12 +81,15 @@ export const UserListResponse = z.object({ users: z.array(User) })
 export const LeadListResponse = z.object({ leads: z.array(Lead) })
 export const LeadDetailResponse = z.object({ lead: Lead, activities: z.array(Activity) })
 export const CreateActivityResponse = z.object({ activity: Activity, lead: Lead })
-export const CreateLeadResponse = z.object({ lead: Lead })
+export const LeadResponse = z.object({ lead: Lead })
+export const CreateLeadResponse = LeadResponse
 
 export const ApiErrorCode = z.enum([
   'validation_failed',
   'not_found',
   'idempotency_conflict',
+  'claim_conflict',
+  'forbidden',
   'unauthenticated',
   'internal',
 ])
@@ -112,6 +117,7 @@ export type ClientLogBatch = z.infer<typeof ClientLogBatch>
 
 export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('lead.created'), leadId: LeadId }),
+  z.object({ type: z.literal('lead.updated'), leadId: LeadId }),
   z.object({ type: z.literal('activity.created'), leadId: LeadId, activityId: ActivityId }),
 ])
 export type ServerEvent = z.infer<typeof ServerEvent>

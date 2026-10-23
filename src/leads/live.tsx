@@ -75,6 +75,17 @@ export function LiveUpdatesProvider({
           ])
           return
         }
+        case 'lead.updated': {
+          // A claim or release (AC-8.6). Our own is already cached; the refetch is cheap and correct.
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: leadKeys.detail(event.leadId) }),
+            queryClient.invalidateQueries({ queryKey: leadKeys.list() }),
+          ])
+          return
+        }
+        default:
+          // A new event type in the contract fails the build here until it is handled.
+          return event satisfies never
       }
     }
 

@@ -13,7 +13,7 @@ import {
   User,
   type UserId,
 } from '../src/contract.ts'
-import { firstResponseAt } from '../src/domain/speedToLead.ts'
+import { firstResponseAt, isContactAttempt } from '../src/domain/speedToLead.ts'
 
 export const Data = z.object({
   users: z.array(User),
@@ -57,6 +57,8 @@ export function appendActivity(
   const updatedLead: Lead = {
     ...lead,
     firstResponseAt: firstResponseAt(activities.filter((a) => a.leadId === leadId)),
+    // The first contact attempt on an unclaimed lead claims it for the author (specs A18).
+    claim: lead.claim ?? (isContactAttempt(input.type) ? { by: author, at: now } : null),
   }
   return {
     result: { kind: 'created', activity, lead: updatedLead },
@@ -68,8 +70,48 @@ export function appendActivity(
   }
 }
 
+export type ClaimResult =
+  | { kind: 'claimed' | 'already_yours'; lead: Lead }
+  | { kind: 'conflict' }
+  | { kind: 'lead_not_found' }
+
+/**
+ * A conditional update (ADR-005): the claim succeeds only while the lead is unclaimed. Run inside
+ * the store's write queue, the check and the set are one step, so of two claims exactly one wins.
+ */
+export function claimLead(data: Data, leadId: LeadId, user: User, now: IsoDateTime) {
+  const lead = data.leads.find((l) => l.id === leadId)
+  if (!lead) return { result: { kind: 'lead_not_found' } as ClaimResult, data }
+  if (lead.claim) {
+    const result: ClaimResult =
+      lead.claim.by.id === user.id ? { kind: 'already_yours', lead } : { kind: 'conflict' }
+    return { result, data }
+  }
+  const claimed: Lead = { ...lead, claim: { by: user, at: now } }
+  return { result: { kind: 'claimed', lead: claimed } as ClaimResult, data: replaceLead(data, claimed) }
+}
+
+export type ReleaseResult =
+  | { kind: 'released' | 'not_claimed'; lead: Lead }
+  | { kind: 'forbidden' }
+  | { kind: 'lead_not_found' }
+
+/** Only the owner can release; releasing an unclaimed lead changes nothing. */
+export function releaseLead(data: Data, leadId: LeadId, user: User) {
+  const lead = data.leads.find((l) => l.id === leadId)
+  if (!lead) return { result: { kind: 'lead_not_found' } as ReleaseResult, data }
+  if (!lead.claim) return { result: { kind: 'not_claimed', lead } as ReleaseResult, data }
+  if (lead.claim.by.id !== user.id) return { result: { kind: 'forbidden' } as ReleaseResult, data }
+  const released: Lead = { ...lead, claim: null }
+  return { result: { kind: 'released', lead: released } as ReleaseResult, data: replaceLead(data, released) }
+}
+
+function replaceLead(data: Data, lead: Lead): Data {
+  return { ...data, leads: data.leads.map((l) => (l.id === lead.id ? lead : l)) }
+}
+
 export function createLead(data: Data, input: NewLead, id: LeadId, now: IsoDateTime) {
-  const lead: Lead = { ...input, id, receivedAt: now, firstResponseAt: null }
+  const lead: Lead = { ...input, id, receivedAt: now, firstResponseAt: null, claim: null }
   return { lead, data: { ...data, leads: [...data.leads, lead] } }
 }
 

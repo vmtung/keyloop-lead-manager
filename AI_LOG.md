@@ -169,3 +169,22 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   `;` as a statement separator in sequence messages.
 - **Decision:** the narrative claims only what the log shows. Lines that are mine to say in the
   interview stay out of the README.
+
+## 9. NICE 1: claiming a lead
+
+- **Ask:** Let a salesperson claim a lead, with a conflict when two claim the same one. The AI asked
+  whether the first call should claim the lead automatically; I didn't answer, so it went with its
+  recommendation (yes) and said so, leaving it as a one-line spec change if I disagree.
+- **AI output:** spec first (assumption A18, AC-8.1–8.6, contract, ADR-005), then server tests,
+  then code. ADR-005 compares a version number with a conditional update on the claim itself and
+  picks the latter: a version would fail a claim whenever an unrelated activity was logged.
+- **The type system did review work:** adding the claim to the contract made the compiler list every
+  place affected, including an exhaustive `switch` over error codes that refused to build until the
+  new codes had a user-facing message. The AI also found a gap: the switch over live event types had
+  no exhaustiveness check, so a new event would have been ignored silently. It added one and proved
+  it by removing a case and watching the build fail.
+- **Verified:** server tests red then green, including two claims sent at the same moment (exactly
+  one wins); a mutation removing the "already claimed" check failed both conflict tests; an
+  integration test reproduces losing the race before the other claim's event arrives. In the
+  browser, Tom claimed in one tab and Anna's tab updated by itself. axe: no violations. A data file
+  from before claims still loads.

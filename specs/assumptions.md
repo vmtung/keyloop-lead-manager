@@ -59,9 +59,17 @@ The brief leaves these open. Each is a decision we can defend, and each names wh
 - **A17. Website form submissions** arrive as `POST /api/leads`. A script (`pnpm simulate:lead`)
   calls it to demo a lead arriving live.
 
+## Claiming a lead
+
+- **A18. One salesperson can claim a lead** so two people don't call the same customer. Claiming
+  only succeeds while the lead is unclaimed; the second of two simultaneous claims loses and is told
+  who won. Logging the first contact attempt on an unclaimed lead claims it for whoever logged it,
+  because that is the moment someone takes the lead on. Only the owner can release a claim. Anyone
+  can still log follow-ups on a claimed lead, so teammates can cover for each other. Claims don't
+  expire on their own (future work).
+
 ## Only if time allows (specced before building)
 
-- Claiming a lead, with a conflict when two salespeople claim the same one
 - Browser OpenTelemetry traces exported to Jaeger
 - A stubbed "suggested next action"
 

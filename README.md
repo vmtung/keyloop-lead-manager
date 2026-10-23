@@ -10,6 +10,8 @@ salesperson can log a new follow-up from the same screen.
 - **Speed to lead.** Each waiting lead shows how long it has waited and whether it is on track,
   at risk (10 minutes) or overdue (15 minutes). The inbox puts the longest-waiting first.
 - **Live.** New website leads and other salespeople's follow-ups appear without a reload.
+- **Claiming.** A salesperson claims a lead so two people don't call the same customer. If two
+  claim at once, one wins and the other sees who, straight away. The first call claims it too.
 - **Built for weak signal.** A follow-up shows at once and saves in the background. If the save
   fails, the text comes back with Retry, even if the salesperson has moved on to another lead.
   Retrying cannot create a duplicate.
@@ -25,9 +27,9 @@ made slow or unreliable on purpose.
 |---|---|
 | [System design](docs/design.md) | Architecture, data flow, technology choices, observability, scale, and how GenAI helped with the design |
 | [Assumptions](specs/assumptions.md) | Where the brief was open, what was decided and why |
-| [Acceptance criteria](specs/acceptance-criteria.md) | 37 criteria; tests cite them by ID |
+| [Acceptance criteria](specs/acceptance-criteria.md) | 43 criteria; tests cite them by ID |
 | [API contract](specs/api-contract.md) | Endpoints, events and fault injection; schemas in [`src/contract.ts`](src/contract.ts) |
-| [Decision records](docs/adr/) | Stack, server-sent events, mock backend, optimistic logging |
+| [Decision records](docs/adr/) | Stack, server-sent events, mock backend, optimistic logging, claiming |
 | [AI collaboration log](AI_LOG.md) | Each step with the AI: what I asked, what it produced, what I decided |
 
 ## Run it
@@ -70,7 +72,7 @@ The "Signed in as" menu picks the salesperson; there is no real login (assumptio
 pnpm test
 ```
 
-118 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+132 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
@@ -163,5 +165,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-118 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+132 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

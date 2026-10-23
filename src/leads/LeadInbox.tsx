@@ -1,8 +1,8 @@
 import { CircleAlert } from 'lucide-react'
 import { Link } from 'react-router'
 import { describeFailure } from '../api/describeFailure.ts'
-import { useNow } from '../app/context.tsx'
-import type { Lead, LeadId } from '../contract.ts'
+import { useCurrentUser, useNow } from '../app/context.tsx'
+import type { Lead, LeadId, UserId } from '../contract.ts'
 import { formatDuration, formatWhen } from '../domain/format.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
 import { SLA, sortForInbox, speedToLead } from '../domain/speedToLead.ts'
@@ -51,10 +51,17 @@ interface RowState {
   /** Read once here and passed down, so a row re-renders only when its own lead changes state. */
   fresh: ReadonlySet<LeadId>
   unsaved: ReadonlySet<LeadId>
+  userId: UserId | undefined
 }
 
 function LeadGroups({ leads, selectedId, now }: { leads: Lead[]; selectedId: LeadId | undefined; now: number }) {
-  const state: RowState = { selectedId, now, fresh: useLive().fresh, unsaved: useUnsavedLeadIds() }
+  const state: RowState = {
+    selectedId,
+    now,
+    fresh: useLive().fresh,
+    unsaved: useUnsavedLeadIds(),
+    userId: useCurrentUser().user?.id,
+  }
   const awaiting = leads.filter((l) => l.firstResponseAt === null)
   const contacted = leads.filter((l) => l.firstResponseAt !== null)
   return (
@@ -86,6 +93,7 @@ function LeadGroup(props: { title: string; leads: Lead[]; state: RowState; empty
                 selected={lead.id === props.state.selectedId}
                 fresh={props.state.fresh.has(lead.id)}
                 unsaved={props.state.unsaved.has(lead.id)}
+                owner={ownerLabel(lead, props.state.userId)}
               />
             </li>
           ))}
@@ -95,8 +103,21 @@ function LeadGroup(props: { title: string; leads: Lead[]; state: RowState; empty
   )
 }
 
-function LeadRow(props: { lead: Lead; now: number; selected: boolean; fresh: boolean; unsaved: boolean }) {
-  const { lead, now, selected, fresh, unsaved } = props
+/** "You", or the owner's first name: short enough for the row, and the detail has the full name. */
+function ownerLabel(lead: Lead, userId: UserId | undefined): string | null {
+  if (!lead.claim) return null
+  return lead.claim.by.id === userId ? 'You' : (lead.claim.by.name.split(' ')[0] ?? lead.claim.by.name)
+}
+
+function LeadRow(props: {
+  lead: Lead
+  now: number
+  selected: boolean
+  fresh: boolean
+  unsaved: boolean
+  owner: string | null
+}) {
+  const { lead, now, selected, fresh, unsaved, owner } = props
   const awaiting = lead.firstResponseAt === null
   const subject = lead.vehicle
     ? `${ENQUIRY_LABEL[lead.enquiryType]} · ${lead.vehicle.make} ${lead.vehicle.model}`
@@ -109,7 +130,10 @@ function LeadRow(props: { lead: Lead; now: number; selected: boolean; fresh: boo
       data-lead-link
     >
       <span className="lead-row__name">{lead.customer.name}</span>
-      <span className="lead-row__when num">{formatWhen(lead.receivedAt, now)}</span>
+      <span className="lead-row__when num">
+        {owner && <span className="lead-row__owner">{owner} · </span>}
+        {formatWhen(lead.receivedAt, now)}
+      </span>
       <span className="lead-row__subject">{subject}</span>
       <span className="lead-row__status">
         {/* One status mark per row: an unsaved activity outranks the SLA, it needs action now. */}

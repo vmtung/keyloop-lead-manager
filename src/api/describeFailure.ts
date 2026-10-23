@@ -19,6 +19,10 @@ export function describeFailure(error: unknown): string {
           return 'This lead no longer exists.'
         case 'unauthenticated':
           return 'Your sign-in wasn’t recognised. Reload and choose your name.'
+        case 'claim_conflict':
+          return 'Someone else claimed this lead first.'
+        case 'forbidden':
+          return 'Only the salesperson who claimed this lead can release it.'
         case 'idempotency_conflict':
           return 'This activity clashes with one already saved. Reload to see the latest.'
         case 'validation_failed':

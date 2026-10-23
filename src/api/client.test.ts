@@ -38,7 +38,8 @@ afterEach(() => {
 describe('successful requests', () => {
   test('parses a valid response', async () => {
     const api = apiWith(async () => json({ leads: [lead] }))
-    expect(await api.listLeads()).toEqual({ leads: [lead] })
+    // A lead without `claim` (data from before claims) parses with `claim: null`.
+    expect(await api.listLeads()).toEqual({ leads: [{ ...lead, claim: null }] })
   })
 
   test('sends a request ID, and the user ID on writes', async () => {

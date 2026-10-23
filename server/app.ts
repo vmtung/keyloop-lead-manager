@@ -13,13 +13,14 @@ import {
   LeadDetailResponse,
   LeadId,
   LeadListResponse,
+  LeadResponse,
   NewActivity,
   NewLead,
   type ServerEvent,
   UserId,
   UserListResponse,
 } from '../src/contract.ts'
-import { appendActivity, createLead, type Store } from './store.ts'
+import { appendActivity, claimLead, createLead, releaseLead, type Store } from './store.ts'
 
 export interface Faults {
   latencyMs: { min: number; max: number }
@@ -139,9 +140,59 @@ export function createApp(deps: AppDeps) {
     return c.json(send(LeadDetailResponse, { lead, activities }))
   })
 
+  const currentUser = (header: string | undefined) => {
+    const userId = UserId.safeParse(header)
+    return userId.success ? deps.store.findUser(userId.data) : undefined
+  }
+
+  app.post('/leads/:leadId/claim', async (c) => {
+    const user = currentUser(c.req.header('x-user-id'))
+    if (!user) return c.json(error('unauthenticated', 'Unknown or missing x-user-id'), 401)
+    const leadId = LeadId.safeParse(c.req.param('leadId'))
+    if (!leadId.success) return c.json(error('not_found', 'Lead not found'), 404)
+
+    const result = await deps.store.update((data) => {
+      const next = claimLead(data, leadId.data, user, nowIso())
+      return { data: next.data, value: next.result }
+    })
+    switch (result.kind) {
+      case 'lead_not_found':
+        return c.json(error('not_found', 'Lead not found'), 404)
+      case 'conflict':
+        return c.json(error('claim_conflict', 'Lead already claimed by someone else'), 409)
+      case 'already_yours':
+        return c.json(send(LeadResponse, { lead: result.lead }))
+      case 'claimed':
+        emit({ type: 'lead.updated', leadId: result.lead.id })
+        return c.json(send(LeadResponse, { lead: result.lead }))
+    }
+  })
+
+  app.delete('/leads/:leadId/claim', async (c) => {
+    const user = currentUser(c.req.header('x-user-id'))
+    if (!user) return c.json(error('unauthenticated', 'Unknown or missing x-user-id'), 401)
+    const leadId = LeadId.safeParse(c.req.param('leadId'))
+    if (!leadId.success) return c.json(error('not_found', 'Lead not found'), 404)
+
+    const result = await deps.store.update((data) => {
+      const next = releaseLead(data, leadId.data, user)
+      return { data: next.data, value: next.result }
+    })
+    switch (result.kind) {
+      case 'lead_not_found':
+        return c.json(error('not_found', 'Lead not found'), 404)
+      case 'forbidden':
+        return c.json(error('forbidden', 'Only the owner can release a claim'), 403)
+      case 'not_claimed':
+        return c.json(send(LeadResponse, { lead: result.lead }))
+      case 'released':
+        emit({ type: 'lead.updated', leadId: result.lead.id })
+        return c.json(send(LeadResponse, { lead: result.lead }))
+    }
+  })
+
   app.post('/leads/:leadId/activities', async (c) => {
-    const userId = UserId.safeParse(c.req.header('x-user-id'))
-    const author = userId.success ? deps.store.findUser(userId.data) : undefined
+    const author = currentUser(c.req.header('x-user-id'))
     if (!author) return c.json(error('unauthenticated', 'Unknown or missing x-user-id'), 401)
 
     const leadId = LeadId.safeParse(c.req.param('leadId'))

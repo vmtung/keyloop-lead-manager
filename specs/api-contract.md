@@ -22,6 +22,8 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 | `GET /leads/:leadId` | | 200 `LeadDetailResponse`, activities oldest first | 404 `not_found` |
 | `POST /leads/:leadId/activities` | `NewActivity` | 201 `CreateActivityResponse` (new) or 200 (same ID replayed) | 400 `validation_failed`, 401 `unauthenticated`, 404 `not_found`, 409 `idempotency_conflict` |
 | `POST /leads` | `NewLead` | 201 `CreateLeadResponse` | 400 `validation_failed` |
+| `POST /leads/:leadId/claim` | | 200 `LeadResponse` (claimed, or already yours) | 401 `unauthenticated`, 404 `not_found`, 409 `claim_conflict` |
+| `DELETE /leads/:leadId/claim` | | 200 `LeadResponse` (released, or was unclaimed) | 401 `unauthenticated`, 403 `forbidden`, 404 `not_found` |
 | `GET /events` | | `text/event-stream` of `ServerEvent` | |
 | `POST /logs` | `ClientLogBatch` | 204 | 400 `validation_failed` |
 | `GET /health` | | 200 `{ "ok": true }` | |
@@ -40,6 +42,14 @@ The client generates the activity `id` (UUID), so the request is idempotent (ADR
 The response includes the updated `lead`, so the client takes `firstResponseAt` from the server
 rather than computing it.
 
+### Claiming a lead
+
+A claim succeeds only while the lead is unclaimed (ADR-005). The server checks and sets the owner in
+one step, so of two simultaneous claims exactly one wins; the other gets 409 `claim_conflict` and
+refetches the lead to see who. Claiming a lead you already own returns 200 and changes nothing.
+Only the owner can release (403 `forbidden` otherwise). Logging the first contact attempt on an
+unclaimed lead also claims it for the author. Every claim and release emits `lead.updated`.
+
 ### Client logs
 
 The browser batches its structured log entries (up to 20, or every 5 seconds) and posts them here,
@@ -56,6 +66,8 @@ would be an OpenTelemetry collector or a vendor intake; the client code would no
 data: {"type":"lead.created","leadId":"…"}
 
 data: {"type":"activity.created","leadId":"…","activityId":"…"}
+
+data: {"type":"lead.updated","leadId":"…"}
 ```
 
 Events carry IDs only. The client refetches the affected queries (ADR-002). There is no replay of

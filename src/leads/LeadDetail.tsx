@@ -9,6 +9,7 @@ import { formatPrice, formatWhen } from '../domain/format.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
 import { ActivityComposer } from './ActivityComposer.tsx'
 import { ActivityLog } from './ActivityLog.tsx'
+import { ClaimBar } from './ClaimBar.tsx'
 import { useLead, usePendingActivities } from './queries.ts'
 import { SpeedToLeadMeter } from './SpeedToLeadStatus.tsx'
 
@@ -59,6 +60,7 @@ export function LeadDetail({ leadId }: { leadId: LeadId }) {
             <Mail aria-hidden size={14} /> {lead.customer.email}
           </a>
         </p>
+        <ClaimBar lead={lead} now={now} />
         <SpeedToLeadMeter lead={lead} now={now} />
       </header>
       <div className="detail__body">
