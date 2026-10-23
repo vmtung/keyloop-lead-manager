@@ -267,8 +267,8 @@ mobile network can leave a connection half-open too.
 
 Measured on the production build:
 
-- **JavaScript:** 132 KB gzipped in one chunk. react-dom is 66 KB, Zod 26 KB, and the app's own code
-  10.5 KB. Icons tree-shake to 2.5 KB. Zod's smaller `zod/mini` build is the main lever left; it
+- **JavaScript:** 134 KB gzipped in one chunk. react-dom is 66 KB, Zod 26 KB, and the app's own code
+  about 12 KB. Icons tree-shake to 2.5 KB. Zod's smaller `zod/mini` build is the main lever left; it
   isn't worth its less readable syntax for an internal tool cached after the first load.
 - **Load:** FCP 100 to 170 ms and LCP 330 to 700 ms in Chrome on a lead page. The LCP element is the
   customer's message, which waits for the API, so LCP follows the mock's simulated latency of 150
