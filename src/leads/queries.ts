@@ -3,6 +3,7 @@
 import { type Mutation, useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { z } from 'zod'
 import { describeFailure } from '../api/describeFailure.ts'
+import { withSpan } from '../observability/trace.ts'
 import { useAnnounce, useApi } from '../app/context.tsx'
 import { ApiError } from '../api/client.ts'
 import type { Lead, LeadDetailResponse, LeadId, LeadListResponse, NewActivity, User } from '../contract.ts'
@@ -43,8 +44,12 @@ export function useLogActivity(leadId: LeadId) {
   const announce = useAnnounce()
   return useMutation({
     mutationKey: logActivityKey(leadId),
+    // In traced mode this span is the root of the trace: the click, then the request, then the
+    // server's handler, write and emit (AC-7.7).
     mutationFn: ({ activity, author }: LogActivityInput) =>
-      api.createActivity(leadId, activity, author.id),
+      withSpan('activity.log', { 'lead.id': leadId, 'activity.type': activity.type }, () =>
+        api.createActivity(leadId, activity, author.id),
+      ),
     // A failed activity stays in the mutation cache until it is retried or replaced, so it survives
     // the composer unmounting (the salesperson moved on) and is offered again on return.
     gcTime: Infinity,

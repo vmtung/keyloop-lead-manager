@@ -15,8 +15,16 @@ import { isPageUnloading, startObservability } from './observability/setup.ts'
 
 startObservability()
 
+// Traced mode only. Vite replaces the env value at build time, so a normal build drops this branch
+// and the tracing chunk with it.
+if (import.meta.env.VITE_TRACING === 'true') {
+  void import('./observability/tracing.ts').then((m) => m.startTracing())
+}
+
 const api = createApi({
-  fetch: window.fetch.bind(window),
+  // Looked up per call, not bound once: traced mode patches window.fetch after this runs, and a
+  // bound copy would keep the unpatched one (no fetch spans, no traceparent).
+  fetch: (input, init) => window.fetch(input, init),
   baseUrl: '/api',
   timeoutMs: 10_000,
   isUnloading: isPageUnloading,

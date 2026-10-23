@@ -14,6 +14,13 @@ const log = (entry: Record<string, unknown>) => {
   console.log(JSON.stringify(Object.assign({ ts }, entry, { ts })))
 }
 
+if (process.env.OTEL_TRACING === 'true') {
+  const { startTracing } = await import('./tracing.ts')
+  const endpoint = process.env.OTEL_EXPORTER_URL ?? 'http://localhost:4318/v1/traces'
+  startTracing(endpoint)
+  log({ level: 'info', message: `Tracing to ${endpoint}` })
+}
+
 const store = await openStore(file, () => seed())
 const app = createApp({ store, faults, log })
 

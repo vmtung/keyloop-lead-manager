@@ -11,7 +11,7 @@ Requirements and decisions live in the repository, and this document links to th
 repeating them:
 
 - [`specs/assumptions.md`](../specs/assumptions.md): 17 assumptions where the brief was open
-- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 46 criteria with IDs that tests cite
+- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 47 criteria with IDs that tests cite
 - [`specs/api-contract.md`](../specs/api-contract.md) and [`src/contract.ts`](../src/contract.ts): the API
 - [`docs/adr/`](adr/): five architecture decision records
 
@@ -253,11 +253,33 @@ mobile network can leave a connection half-open too.
   recovery screen shows the first characters of the session ID, so a salesperson can quote a
   reference that finds their logs.
 
+### Traces (traced mode)
+
+`pnpm traces:up` starts Jaeger 2.22 in Docker and `pnpm dev:traced` turns tracing on. Logging an
+activity then produces one trace across both services (AC-7.7):
+
+![One trace in Jaeger: activity.log in the browser, its POST, and the server's handler with the injected latency, the file write and the event emit](screenshots/trace.jpg)
+
+- The browser wraps the save in an `activity.log` span; the fetch instrumentation adds a child span
+  for the request and sends a W3C `traceparent` header.
+- The server continues that trace: a span for the request, with children for the mock's injected
+  latency, the store write and the event emit. Without its own span, the injected latency looked
+  like slow handler code.
+- The server records spans through the OpenTelemetry API only, which does nothing until traced
+  mode registers the SDK. Tests and `pnpm dev` run the same code and record nothing.
+- In the browser, tracing loads behind a build-time flag. The normal build contains no
+  OpenTelemetry code (about 133.8 KB gzipped against 133.75 KB before; the difference is the
+  `withSpan` hook). The traced build adds a separate 23 KB chunk.
+- Browser spans go to Jaeger through Vite's `/otlp` proxy, so there is no CORS to configure.
+- The API client looks up `window.fetch` on every call. It used to bind it once at startup, which
+  kept the unpatched `fetch` and left the server spans in separate traces. Running a real trace
+  showed it; the unit test of the server side could not.
+
 ### In production
 
 | Signal | Plan |
 |---|---|
-| Traces | OpenTelemetry in the browser and the services, with W3C `traceparent` in place of `x-request-id`, so one trace runs from the click through the gateway to the database. (NICE item: browser traces to Jaeger.) |
+| Traces | The traced mode above, with sampling, the OpenTelemetry collector in front of the vendor, and `traceparent` replacing `x-request-id` as the correlation key, so one trace runs from the click through the gateway to the database. |
 | Logs | The `/api/logs` intake becomes an OpenTelemetry collector or a vendor intake; the client code keeps its shape. Customer names, phone numbers and emails stay out of logs, as they do now. |
 | Business metrics | Share of leads answered within 15 minutes, median and 90th-percentile response time, overdue leads right now, per dealership and per salesperson. Speed to lead is the number the product exists to move, so it should be on a dashboard, not only in the UI. |
 | Real-user monitoring | Web Vitals by route and device, against Google's thresholds (LCP under 2.5 s, INP under 200 ms, CLS under 0.1). |
@@ -289,7 +311,7 @@ What changes past this scale (assumption A7: tens to low hundreds of open leads 
 | Level | Count | What it covers |
 |---|---|---|
 | Unit | 77 | SLA boundaries, suggestion rules, response time, inbox order, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
-| Server | 40 | Every endpoint and error code, idempotency, claims including two at once, persistence, fault injection, SSE framing, log intake |
+| Server | 41 | Every endpoint and error code, idempotency, claims including two at once, trace propagation, persistence, fault injection, SSE framing, log intake |
 | Integration | 27 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race and using a suggestion |
 | End-to-end | 1 | A lead arrives live, a call is logged, and it survives a reload, in Chrome, through the real proxy and SSE stream |
 
@@ -323,6 +345,9 @@ Cut to finish a smaller scope properly, in rough order of value:
 4. **Presence** ("Anna is viewing"). This is the feature that would justify moving from SSE to
    WebSocket.
 5. **Won or lost outcomes**, reassignment, search and filters.
+6. **OpenTelemetry 3.** The tracing uses the 2.12 SDK packages, pinned at least two weeks old. Three
+   days later, OpenTelemetry 3.0 merged them into `@opentelemetry/sdk-trace` and marked them
+   deprecated. They still work; moving to 3.x is a small follow-up once it has settled.
 
 ### Where AIME would plug in
 

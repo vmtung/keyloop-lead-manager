@@ -12,6 +12,7 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 |---|---|---|
 | `x-user-id` | request | Who is acting (stand-in for auth, see A2). Required on `POST /leads/:id/activities`. |
 | `x-request-id` | request and response | A UUID the client generates per request. The server logs it and echoes it back. |
+| `traceparent` | request | Traced mode only: W3C trace context from the browser, so the server's spans join the same trace. |
 
 ## Endpoints
 

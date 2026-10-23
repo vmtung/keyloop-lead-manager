@@ -1,5 +1,6 @@
 // HTTP layer for the mock API (specs/api-contract.md). Built as a factory so tests can drive it with
 // app.request() and inject the store, clock, randomness and logger.
+import { context, propagation, SpanKind, SpanStatusCode, trace } from '@opentelemetry/api'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import type { z } from 'zod'
@@ -49,9 +50,57 @@ export function createApp(deps: AppDeps) {
   const nowIso = () => now().toISOString() as IsoDateTime
 
   const listeners = new Set<Listener>()
-  const emit = (event: ServerEvent) => listeners.forEach((l) => l(event))
+  // Tracing goes through the OpenTelemetry API, which does nothing until traced mode registers an
+  // SDK (server/tracing.ts). So tests and `pnpm dev` run the same code and record nothing.
+  const tracer = trace.getTracer('lead-manager-api')
+  const traced = async <T,>(name: string, fn: () => Promise<T>): Promise<T> =>
+    tracer.startActiveSpan(name, async (span) => {
+      try {
+        return await fn()
+      } catch (err) {
+        span.recordException(err as Error)
+        span.setStatus({ code: SpanStatusCode.ERROR })
+        throw err
+      } finally {
+        span.end()
+      }
+    })
+
+  // Every write and every emit goes through these two, so each shows up as a span.
+  const update: Store['update'] = (change) => traced('store.write', () => deps.store.update(change))
+  const emit = (event: ServerEvent) =>
+    tracer.startActiveSpan('events.emit', (span) => {
+      span.setAttributes({ 'event.type': event.type, 'events.listeners': listeners.size })
+      listeners.forEach((l) => l(event))
+      span.end()
+    })
 
   const app = new Hono<{ Variables: { requestId: string } }>().basePath('/api')
+
+  // First, so the server span wraps the whole request, continuing the browser's trace if it sent a
+  // `traceparent` header (traced mode, AC-7.7).
+  app.use(async (c, next) => {
+    // The event stream is one request open for a whole session, and log uploads are about the
+    // telemetry itself: neither belongs in a trace view.
+    if (c.req.path === '/api/events' || c.req.path === '/api/logs') return next()
+    const parent = propagation.extract(context.active(), Object.fromEntries(c.req.raw.headers))
+    const route = c.req.path.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g, ':id')
+    await tracer.startActiveSpan(
+      `${c.req.method} ${route}`,
+      { kind: SpanKind.SERVER, attributes: { 'http.request.method': c.req.method, 'url.path': c.req.path } },
+      parent,
+      async (span) => {
+        try {
+          await next()
+          span.setAttribute('http.response.status_code', c.res.status)
+          if (c.res.status >= 500) span.setStatus({ code: SpanStatusCode.ERROR })
+        } finally {
+          span.setAttribute('request.id', c.get('requestId') ?? '')
+          span.end()
+        }
+      },
+    )
+  })
 
   // Echo the client's request ID (or make one) and log every request as one JSON line (AC-7.3).
   app.use(async (c, next) => {
@@ -76,7 +125,8 @@ export function createApp(deps: AppDeps) {
     if (['/api/health', '/api/events', '/api/logs'].includes(c.req.path)) return next()
     const { min, max } = deps.faults.latencyMs
     const delay = min + random() * (max - min)
-    if (delay > 0) await new Promise((r) => setTimeout(r, delay))
+    // Its own span, so a trace shows the wait as the mock's doing, not the handler's.
+    if (delay > 0) await traced('mock.injected_latency', () => new Promise((r) => setTimeout(r, delay)))
     if (random() < deps.faults.failureRate) {
       return c.json(error('internal', 'Injected failure (MOCK_FAILURE_RATE)'), 500)
     }
@@ -153,7 +203,7 @@ export function createApp(deps: AppDeps) {
     const leadId = LeadId.safeParse(c.req.param('leadId'))
     if (!leadId.success) return c.json(error('not_found', 'Lead not found'), 404)
 
-    const result = await deps.store.update((data) => {
+    const result = await update((data) => {
       const next = claimLead(data, leadId.data, user, nowIso())
       return { data: next.data, value: next.result }
     })
@@ -176,7 +226,7 @@ export function createApp(deps: AppDeps) {
     const leadId = LeadId.safeParse(c.req.param('leadId'))
     if (!leadId.success) return c.json(error('not_found', 'Lead not found'), 404)
 
-    const result = await deps.store.update((data) => {
+    const result = await update((data) => {
       const next = releaseLead(data, leadId.data, user)
       return { data: next.data, value: next.result }
     })
@@ -203,7 +253,7 @@ export function createApp(deps: AppDeps) {
     const body = NewActivity.safeParse(await readJson(c.req.raw))
     if (!body.success) return c.json(error('validation_failed', body.error.message), 400)
 
-    const result = await deps.store.update((data) => {
+    const result = await update((data) => {
       const next = appendActivity(data, leadId.data, body.data, author, nowIso())
       return { data: next.data, value: next.result }
     })
@@ -227,7 +277,7 @@ export function createApp(deps: AppDeps) {
   app.post('/leads', async (c) => {
     const body = NewLead.safeParse(await readJson(c.req.raw))
     if (!body.success) return c.json(error('validation_failed', body.error.message), 400)
-    const lead = await deps.store.update((data) => {
+    const lead = await update((data) => {
       const next = createLead(data, body.data, newId() as LeadId, nowIso())
       return { data: next.data, value: next.lead }
     })

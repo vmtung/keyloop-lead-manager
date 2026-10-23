@@ -1,0 +1,7 @@
+# Traced mode only (pnpm dev:traced). Jaeger receives OTLP traces on 4318; its UI is on 16686.
+services:
+  jaeger:
+    image: jaegertracing/jaeger:2.22.0
+    ports:
+      - "16686:16686"
+      - "4318:4318"

@@ -65,5 +65,7 @@ pnpm test           # vitest run
 pnpm test:e2e       # Playwright in installed Chrome, on its own ports and data
 pnpm build          # typecheck + production build
 pnpm simulate:lead  # post a website enquiry to the running mock API
+pnpm traces:up      # Jaeger in Docker (UI on :16686), for traced mode
+pnpm dev:traced     # app and API with OpenTelemetry tracing to Jaeger
 pnpm reset-data     # delete the mock API's data file (stop the server first)
 ```

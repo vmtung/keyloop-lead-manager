@@ -202,3 +202,25 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
 - **Caught by a mutation check:** the test for that fix passed even with the fix removed. The live
   stream's own refetch was clearing the suggestion first, which happens to be the usual order but
   isn't guaranteed. The test now drops the live connection before saving, and fails without the fix.
+
+## 11. NICE 2: OpenTelemetry traces to Jaeger
+
+- **Ask (after approving 8 pinned packages and Docker):** one trace from a click to the server's
+  write, in a traced mode only, with the normal bundle unchanged.
+- **AI output:** spec first (AC-7.7). The server records spans through the OpenTelemetry API, which
+  does nothing until traced mode registers the SDK, so there is one code path. The browser loads
+  tracing behind a build-time flag; the normal build was checked to contain no OpenTelemetry code.
+- **Found while installing:** npm marked the approved 2.12 packages deprecated three days earlier,
+  when OpenTelemetry 3.0 merged them. Kept the approved, older set and recorded the move to 3.x as
+  future work rather than jump to a three-day-old major.
+- **Caught by running it, missed by the tests:**
+  - `pnpm dev` ran every script matching `/^dev:/`, so the new `dev:traced` started itself again.
+    The pattern now names exactly `dev:web` and `dev:api`.
+  - The first real trace held only the browser's span. The API client had bound `window.fetch` at
+    startup, before tracing patched it, so requests carried no `traceparent`. Confirmed in the page
+    before changing anything; the client now looks `fetch` up on every call. The server's unit test
+    (a hand-written `traceparent`) passed throughout, because the bug was on the other side.
+  - A trace showed 270 ms on the server and 1.6 ms of real work. The gap was the mock's injected
+    latency, now its own span so the trace explains itself.
+- **Verified:** read the trace back from Jaeger's API (browser span, its POST, the server request,
+  latency, write, emit), and screenshotted Jaeger's view for the docs.
