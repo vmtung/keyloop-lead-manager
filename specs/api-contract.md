@@ -28,6 +28,9 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 | `POST /leads` | `NewLead` | 201 `CreateLeadResponse` | 400 `validation_failed` |
 | `POST /leads/:leadId/claim` | | 200 `LeadResponse` (claimed, or already yours) | 401 `unauthenticated`, 404 `not_found`, 409 `claim_conflict` |
 | `DELETE /leads/:leadId/claim` | | 200 `LeadResponse` (released, or was unclaimed) | 401 `unauthenticated`, 403 `forbidden`, 404 `not_found` |
+| `GET /notifications?cursor=…&limit=…` | | 200 `NotificationPageResponse`: the signed-in salesperson's notifications, newest first, `limit` (1–100, default 20) at a time, with when they last read them | 400 `validation_failed`, 401 `unauthenticated` |
+| `GET /notifications/unread` | | 200 `UnreadResponse` | 401 `unauthenticated` |
+| `POST /notifications/read` | | 200 `UnreadResponse`: everything up to now is read | 401 `unauthenticated` |
 | `GET /events` | | `text/event-stream` of `ServerEvent` | |
 | `POST /logs` | `ClientLogBatch` | 204 | 400 `validation_failed` |
 | `GET /health` | | 200 `{ "ok": true }` | |
@@ -43,6 +46,14 @@ back as `cursor` for the next page; `null` means the last page. The cursor names
 returned (its `receivedAt` and `id`) rather than an offset, so a lead added while someone scrolls
 doesn't shift the pages and show a row twice. `total` is every contacted lead, for the group
 heading.
+
+### Notifications
+
+Created by the server as it stores the change, in the same write: a new lead notifies everyone; an
+activity by someone other than the lead's owner notifies the owner (A21). There is no separate
+event: clients already hear `lead.created` and `activity.created`, and refetch their unread count
+on either. Read state is one time per salesperson (ADR-007), so marking read is one write however
+many notifications there are. Notification IDs name their source (`lead:<id>`, `activity:<id>`).
 
 ### Logging an activity
 

@@ -88,6 +88,14 @@ The brief leaves these open. Each is a decision we can defend, and each names wh
   who answered is the honest owner of that number. The team view uses the same 24-hour window and
   15-minute target as the inbox figures.
 
+## Notifications
+
+- **A21. Two things notify a salesperson:** a new website lead (everyone), and a teammate logging
+  an activity on a lead they have claimed (the owner only). Notifications are kept by the server,
+  newest first, and read up to a time: opening the list marks everything up to now as read for that
+  person. A new lead also pops up briefly on screen, and can play a short sound, off by default
+  because an unexpected sound in a showroom is worse than none.
+
 ## Only if time allows (specced before building)
 
 - Browser OpenTelemetry traces exported to Jaeger

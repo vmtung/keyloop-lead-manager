@@ -15,8 +15,10 @@ import {
   LeadPageResponse,
   ResponseStats,
   TeamStatsResponse,
+  UnreadResponse,
   LeadResponse,
   type NewActivity,
+  NotificationPageResponse,
   type UserId,
   UserListResponse,
 } from '../contract.ts'
@@ -127,6 +129,17 @@ export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false
       ),
     getStats: (signal?: AbortSignal) => request('/stats', ResponseStats, { signal }),
     getTeamStats: (signal?: AbortSignal) => request('/stats/team', TeamStatsResponse, { signal }),
+    /** The signed-in salesperson's notifications, newest first, 20 at a time (ADR-007). */
+    listNotifications: (userId: UserId, cursor: string | null, signal?: AbortSignal) =>
+      request(
+        `/notifications${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''}`,
+        NotificationPageResponse,
+        { userId, signal },
+      ),
+    getUnread: (userId: UserId, signal?: AbortSignal) =>
+      request('/notifications/unread', UnreadResponse, { userId, signal }),
+    markNotificationsRead: (userId: UserId) =>
+      request('/notifications/read', UnreadResponse, { method: 'POST', userId }),
     getLead: (id: LeadId, signal?: AbortSignal) =>
       request(`/leads/${id}`, LeadDetailResponse, { signal }),
     createActivity: (leadId: LeadId, activity: NewActivity, userId: UserId) =>

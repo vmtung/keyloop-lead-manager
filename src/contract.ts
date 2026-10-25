@@ -155,6 +155,44 @@ export type ClientLogEntry = z.infer<typeof ClientLogEntry>
 export const ClientLogBatch = z.object({ entries: z.array(ClientLogEntry).min(1).max(100) })
 export type ClientLogBatch = z.infer<typeof ClientLogBatch>
 
+// Notifications (A21, ADR-007). The ID names the source: `lead:<id>` or `activity:<id>`.
+
+export const Notification = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('new_lead'),
+    id: z.string().min(1).max(100),
+    at: IsoDateTime,
+    for: z.null(),
+    leadId: LeadId,
+    customerName: z.string().min(1),
+    enquiryType: EnquiryType,
+  }),
+  z.object({
+    kind: z.literal('teammate_activity'),
+    id: z.string().min(1).max(100),
+    at: IsoDateTime,
+    for: UserId,
+    leadId: LeadId,
+    customerName: z.string().min(1),
+    actor: User,
+    activityType: ActivityType,
+  }),
+])
+export type Notification = z.infer<typeof Notification>
+
+export const NotificationListQuery = z.object({
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+})
+export const NotificationPageResponse = z.object({
+  notifications: z.array(Notification),
+  nextCursor: z.string().min(1).nullable(),
+  /** Anything newer than this is unread; null if this person has never opened the list. */
+  lastReadAt: IsoDateTime.nullable(),
+})
+export type NotificationPageResponse = z.infer<typeof NotificationPageResponse>
+export const UnreadResponse = z.object({ unread: z.int().nonnegative() })
+
 // Server-sent events on GET /api/events. Events are thin: the client refetches what changed.
 
 export const ServerEvent = z.discriminatedUnion('type', [

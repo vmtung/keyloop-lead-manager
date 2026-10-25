@@ -20,6 +20,8 @@ salesperson can log a new follow-up from the same screen.
 - **Built for weak signal.** A follow-up shows at once and saves in the background. If the save
   fails, the text comes back with Retry, even if the salesperson has moved on to another lead.
   Retrying cannot create a duplicate.
+- **Notifications.** A bell counts new leads and teammates working your leads; its list loads only
+  when opened. A new lead pops up on screen, with an optional chime, off by default.
 - **Team view.** Speed to lead per salesperson over the last day, credited to whoever made first
   contact, with the waiting leads each person has claimed.
 - **Dealership-sized.** Waiting leads load in full; contacted ones load 50 at a time as you scroll.
@@ -36,9 +38,9 @@ made slow or unreliable on purpose.
 |---|---|
 | [System design](docs/design.md) | Architecture, data flow, technology choices, observability, scale, and how GenAI helped with the design |
 | [Assumptions](specs/assumptions.md) | Where the brief was open, what was decided and why |
-| [Acceptance criteria](specs/acceptance-criteria.md) | 56 criteria; tests cite them by ID |
+| [Acceptance criteria](specs/acceptance-criteria.md) | 61 criteria; tests cite them by ID |
 | [API contract](specs/api-contract.md) | Endpoints, events and fault injection; schemas in [`src/contract.ts`](src/contract.ts) |
-| [Decision records](docs/adr/) | Stack, server-sent events, mock backend, optimistic logging, claiming, paging the inbox |
+| [Decision records](docs/adr/) | Stack, server-sent events, mock backend, optimistic logging, claiming, paging the inbox, notifications |
 | [AI collaboration log](AI_LOG.md) | Each step with the AI: what I asked, what it produced, what I decided |
 
 ## Run it
@@ -93,7 +95,7 @@ Stop Jaeger with `pnpm traces:down`.
 pnpm test
 ```
 
-215 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+237 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
@@ -128,6 +130,7 @@ src/
   api/            the API client and the event stream: all parsing happens here
   leads/          inbox, lead detail, activity log, composer, live updates
   team/           speed to lead per salesperson
+  notifications/  the bell, its list, pop-ups and the chime
   observability/  structured logs, log shipping, Web Vitals
 server/           mock API (Hono): REST, events, idempotent writes, fault injection
 e2e/              the Playwright journey
@@ -188,5 +191,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-215 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+237 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

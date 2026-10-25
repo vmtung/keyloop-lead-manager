@@ -12,6 +12,7 @@ import App from './App.tsx'
 import { AnnouncerProvider, ApiProvider, CurrentUserProvider, NowProvider } from './app/context.tsx'
 import { ErrorBoundary } from './app/ErrorBoundary.tsx'
 import { LiveUpdatesProvider } from './leads/live.tsx'
+import { ToastProvider } from './notifications/toasts.tsx'
 import { isPageUnloading, startObservability } from './observability/setup.ts'
 
 startObservability()
@@ -43,6 +44,7 @@ createRoot(document.getElementById('root')!).render(
           <NowProvider>
             <AnnouncerProvider>
               <CurrentUserProvider>
+                <ToastProvider>
                 <LiveUpdatesProvider>
                   <App />
                   {DemoTools && (
@@ -51,6 +53,7 @@ createRoot(document.getElementById('root')!).render(
                     </Suspense>
                   )}
                 </LiveUpdatesProvider>
+                </ToastProvider>
               </CurrentUserProvider>
             </AnnouncerProvider>
           </NowProvider>

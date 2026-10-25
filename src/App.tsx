@@ -9,6 +9,7 @@ import { LeadInbox } from './leads/LeadInbox.tsx'
 import { NextUp } from './leads/NextUp.tsx'
 import { Avatar } from './leads/Avatar.tsx'
 import { LiveIndicator } from './leads/live.tsx'
+import { NotificationBell } from './notifications/NotificationBell.tsx'
 import { TeamView } from './team/TeamView.tsx'
 
 export default function App() {
@@ -41,6 +42,7 @@ function Shell() {
         </nav>
         <div className="topbar__end">
           <LiveIndicator />
+          <NotificationBell />
           <UserSwitcher />
         </div>
       </header>

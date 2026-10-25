@@ -5,20 +5,26 @@ import { dirname } from 'node:path'
 import { z } from 'zod'
 import {
   Activity,
-  type IsoDateTime,
+  IsoDateTime,
   Lead,
   type LeadId,
   type NewActivity,
   type NewLead,
+  Notification,
   User,
   type UserId,
 } from '../src/contract.ts'
 import { firstResponseAt, isContactAttempt } from '../src/domain/speedToLead.ts'
+import { newLeadNotification, teammateNotification } from './notifications.ts'
 
 export const Data = z.object({
   users: z.array(User),
   leads: z.array(Lead),
   activities: z.array(Activity),
+  // Defaults, so a data file from before notifications still loads.
+  notifications: z.array(Notification).default([]),
+  /** When each salesperson last opened their notifications (ADR-007). */
+  reads: z.record(z.string(), IsoDateTime).default({}),
 })
 export type Data = z.infer<typeof Data>
 
@@ -60,12 +66,15 @@ export function appendActivity(
     // The first contact attempt on an unclaimed lead claims it for the author (specs A18).
     claim: lead.claim ?? (isContactAttempt(input.type) ? { by: author, at: now } : null),
   }
+  // The owner as it was before this activity: a first contact that claims the lead notifies nobody.
+  const notification = teammateNotification(lead.claim, updatedLead, activity)
   return {
     result: { kind: 'created', activity, lead: updatedLead },
     data: {
       ...data,
       leads: data.leads.map((l) => (l.id === leadId ? updatedLead : l)),
       activities,
+      notifications: notification ? [...data.notifications, notification] : data.notifications,
     },
   }
 }
@@ -112,7 +121,10 @@ function replaceLead(data: Data, lead: Lead): Data {
 
 export function createLead(data: Data, input: NewLead, id: LeadId, now: IsoDateTime) {
   const lead: Lead = { ...input, id, receivedAt: now, firstResponseAt: null, claim: null }
-  return { lead, data: { ...data, leads: [...data.leads, lead] } }
+  return {
+    lead,
+    data: { ...data, leads: [...data.leads, lead], notifications: [...data.notifications, newLeadNotification(lead)] },
+  }
 }
 
 export interface Store {

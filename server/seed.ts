@@ -12,6 +12,7 @@ import type {
   UserId,
 } from '../src/contract.ts'
 import { firstResponseAt, isContactAttempt } from '../src/domain/speedToLead.ts'
+import { withNotifications } from './notifications.ts'
 import type { Data } from './store.ts'
 
 export const USERS: User[] = [
@@ -141,7 +142,7 @@ export function seed(now: Date = new Date()): Data {
     })
   })
 
-  return { users: USERS, leads, activities }
+  return withNotifications({ users: USERS, leads, activities, notifications: [], reads: {} }, now)
 }
 
 function firstContactClaim(activities: Activity[]): Lead['claim'] {

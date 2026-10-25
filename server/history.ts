@@ -3,6 +3,7 @@
 // random, so every reset makes the same data.
 import type { Activity, ActivityId, ActivityType, EnquiryType, IsoDateTime, Lead, LeadId } from '../src/contract.ts'
 import { seed, USERS } from './seed.ts'
+import { withNotifications } from './notifications.ts'
 import type { Data } from './store.ts'
 
 const COUNT = 5000
@@ -102,7 +103,7 @@ export function withHistory(base: Data, now: Date): Data {
     })
   }
 
-  return { ...base, leads: [...base.leads, ...leads], activities: [...base.activities, ...activities] }
+  return withNotifications({ ...base, leads: [...base.leads, ...leads], activities: [...base.activities, ...activities] }, now)
 }
 
 function uuidFrom(n: number): string {

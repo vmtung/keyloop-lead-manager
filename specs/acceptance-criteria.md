@@ -110,3 +110,13 @@ AI_LOG).
 | AC-10.1 | `/team` shows one row per salesperson: leads they answered first in the last 24 hours (credited as in A20), the share of those within the 15-minute target, their median first response, and the waiting leads they have claimed now, with how many are overdue. Busiest first. With nothing to measure, a figure shows a dash. | unit, integration |
 | AC-10.2 | The top bar links to **Leads** and **Team** and marks the current one. | integration |
 | AC-10.3 | The team view updates without a reload when a lead changes, and refreshes every minute as the window slides. While loading it reserves its space; a failed load shows an error and **Retry**. | integration |
+
+## 11. Notifications
+
+| ID | Criterion | Test |
+|---|---|---|
+| AC-11.1 | The top bar has a notifications button showing how many are unread for the signed-in salesperson (A21), named for screen readers ("Notifications, 3 unread"). The count updates live and is hidden at zero. | unit (server), integration |
+| AC-11.2 | Opening it loads notifications newest first, 20 at a time, only once opened, with **Load more**. Each links to its lead, and unread ones are marked. Opening marks them all read. Escape or a click outside closes it and returns focus to the button. A failed load shows an error and **Retry**. | unit (server), integration |
+| AC-11.3 | A new lead pops up for 8 seconds with an **Open** link and a close button. It doesn't take focus, and screen readers hear the new lead once (AC-5.1), not twice. | integration |
+| AC-11.4 | Sound is off by default. A switch in the notifications list turns on a short chime for new leads, remembered in this browser. | integration |
+| AC-11.5 | Notifications persist across restarts, and the starting data includes their history, so the list has thousands to page through. Switching salesperson shows that person's notifications and unread count. | unit (server), integration |

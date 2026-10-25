@@ -14,6 +14,8 @@ import {
   LeadDetailResponse,
   LeadListResponse,
   LeadPageResponse,
+  NotificationPageResponse,
+  UnreadResponse,
   ResponseStats,
   TeamStatsResponse,
   ServerEvent,
@@ -600,5 +602,70 @@ describe('dev endpoints (demo tools)', () => {
     const history = store.read().activities.filter((a) => a.id.startsWith('00000000-0000-4000-8000-00000100'))
     expect(history.length).toBeGreaterThan(5000)
     expect(history.every((a) => Date.parse(a.occurredAt) <= NOW.getTime())).toBe(true)
+  })
+})
+
+describe('notifications (A21, ADR-007)', () => {
+  const as = (user: string, init: RequestInit = {}) => ({ ...init, headers: { 'x-user-id': user } })
+  const unread = async (app: Awaited<ReturnType<typeof setup>>['app'], user: string) =>
+    UnreadResponse.parse(await (await app.request('/api/notifications/unread', as(user))).json()).unread
+
+  test('AC-11.1: each salesperson has an unread count, and a new lead adds one for everyone', async () => {
+    const { app } = await setup()
+    expect(await unread(app, 'anna')).toBe(3)
+    const created = await app.request('/api/leads', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        customer: { name: 'Test Lead', email: 'test@example.com', phone: '07700 900999' },
+        enquiryType: 'vehicle_enquiry',
+        message: 'Hello',
+        vehicle: null,
+      }),
+    })
+    expect(created.status).toBe(201)
+    expect(await unread(app, 'anna')).toBe(4)
+    expect(await unread(app, 'tom')).toBe(4)
+  })
+
+  test('AC-11.2: the list pages newest first with the last read time; marking read clears the count for that person only', async () => {
+    const { app } = await setup()
+    const first = NotificationPageResponse.parse(await (await app.request('/api/notifications?limit=3', as('anna'))).json())
+    expect(first.notifications.map((n) => n.customerName)).toEqual(['Olivia Bennett', 'Marcus Reid', 'Hannah Okafor'])
+    expect(first.lastReadAt).not.toBeNull()
+    const second = NotificationPageResponse.parse(
+      await (await app.request(`/api/notifications?limit=3&cursor=${first.nextCursor}`, as('anna'))).json(),
+    )
+    expect(second.notifications.map((n) => n.customerName)[0]).toBe('Daniel Murphy')
+
+    const read = await app.request('/api/notifications/read', as('anna', { method: 'POST' }))
+    expect(UnreadResponse.parse(await read.json()).unread).toBe(0)
+    expect(await unread(app, 'anna')).toBe(0)
+    expect(await unread(app, 'tom')).toBe(3)
+  })
+
+  test('AC-11.5: a teammate working your lead notifies you, and only you', async () => {
+    const { app } = await setup()
+    await postActivity(app, { id: crypto.randomUUID(), type: 'call', summary: 'Called' }, { user: 'anna' }) // claims Olivia
+    await postActivity(app, { id: crypto.randomUUID(), type: 'note', summary: 'Prefers texts' }, { user: 'tom' })
+    expect(await unread(app, 'anna')).toBe(4)
+    expect(await unread(app, 'tom')).toBe(3)
+    const page = NotificationPageResponse.parse(await (await app.request('/api/notifications', as('anna'))).json())
+    expect(page.notifications[0]).toMatchObject({ kind: 'teammate_activity', customerName: 'Olivia Bennett', actor: { id: 'tom' } })
+  })
+
+  test.each([
+    ['/api/notifications', 'GET'],
+    ['/api/notifications/unread', 'GET'],
+    ['/api/notifications/read', 'POST'],
+  ])('%s without a known user is a 401', async (path, method) => {
+    const { app } = await setup()
+    expect((await app.request(path, { method })).status).toBe(401)
+    expect((await app.request(path, { method, headers: { 'x-user-id': 'nobody' } })).status).toBe(401)
+  })
+
+  test('a bad cursor is a 400', async () => {
+    const { app } = await setup()
+    expect((await app.request('/api/notifications?cursor=nope', as('anna'))).status).toBe(400)
   })
 })

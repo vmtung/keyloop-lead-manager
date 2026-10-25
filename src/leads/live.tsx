@@ -9,6 +9,9 @@ import { useAnnounce, useApi } from '../app/context.tsx'
 import type { LeadDetailResponse, LeadId, LeadListResponse, ServerEvent } from '../contract.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
 import type { ContactedPages } from './placeLead.ts'
+import { playChime, isSoundOn } from '../notifications/chime.ts'
+import { notificationKeys } from '../notifications/queries.ts'
+import { useShowToast } from '../notifications/toasts.tsx'
 import { leadKeys, refreshLead } from './queries.ts'
 
 const FRESH_MS = 8_000
@@ -36,6 +39,7 @@ export function LiveUpdatesProvider({
   const queryClient = useQueryClient()
   const api = useApi()
   const announce = useAnnounce()
+  const showToast = useShowToast()
   const [status, setStatus] = useState<LiveStatus>('connecting')
   const [fresh, setFresh] = useState<ReadonlySet<LeadId>>(new Set())
   const previous = useRef<LiveStatus>('connecting')
@@ -56,6 +60,8 @@ export function LiveUpdatesProvider({
     }
 
     async function onEvent(event: ServerEvent) {
+      // New leads and teammates' activity are what notify (A21): refresh the unread count.
+      if (event.type !== 'lead.updated') void queryClient.invalidateQueries({ queryKey: notificationKeys.all })
       switch (event.type) {
         case 'lead.created': {
           // New leads are waiting, and the waiting list is small: refetch it whole.
@@ -65,6 +71,15 @@ export function LiveUpdatesProvider({
           if (!lead) return // the refetch failed; the inbox shows its own error
           markFresh(lead.id)
           announce(`New lead from ${lead.customer.name}: ${ENQUIRY_LABEL[lead.enquiryType]}.`)
+          showToast({
+            id: lead.id,
+            title: `New lead: ${lead.customer.name}`,
+            detail: lead.vehicle
+              ? `${ENQUIRY_LABEL[lead.enquiryType]} · ${lead.vehicle.make} ${lead.vehicle.model}`
+              : ENQUIRY_LABEL[lead.enquiryType],
+            leadId: lead.id,
+          })
+          if (isSoundOn()) playChime()
           return
         }
         case 'activity.created': {
@@ -114,7 +129,7 @@ export function LiveUpdatesProvider({
       unsubscribe()
       freshTimers.forEach(clearTimeout)
     }
-  }, [queryClient, api, announce, createSource])
+  }, [queryClient, api, announce, showToast, createSource])
 
   return <LiveContext value={{ status, fresh }}>{children}</LiveContext>
 }
@@ -129,7 +144,7 @@ export function LiveIndicator() {
   const { status } = useLive()
   return (
     <span className={`live live--${status}`} title={status === 'reconnecting' ? 'New leads will appear once the connection is back.' : undefined}>
-      <span className="live__dot" aria-hidden /> {STATUS_TEXT[status]}
+      <span className="live__dot" aria-hidden /> <span className="live__label">{STATUS_TEXT[status]}</span>
     </span>
   )
 }

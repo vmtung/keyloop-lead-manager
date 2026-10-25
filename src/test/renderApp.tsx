@@ -16,6 +16,7 @@ import App from '../App.tsx'
 import type { EventSourceLike } from '../api/events.ts'
 import { AnnouncerProvider, ApiProvider, CurrentUserProvider, NowProvider } from '../app/context.tsx'
 import { LiveUpdatesProvider } from '../leads/live.tsx'
+import { ToastProvider } from '../notifications/toasts.tsx'
 
 interface Options {
   route?: string
@@ -97,10 +98,12 @@ export async function renderApp({ route = '/leads', data = (d) => d, network: se
           <NowProvider>
             <AnnouncerProvider>
               <CurrentUserProvider>
+                <ToastProvider>
                 <LiveUpdatesProvider createSource={live.create}>
                   <App />
                   {extra}
                 </LiveUpdatesProvider>
+                </ToastProvider>
               </CurrentUserProvider>
             </AnnouncerProvider>
           </NowProvider>

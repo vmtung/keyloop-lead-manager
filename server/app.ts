@@ -22,17 +22,21 @@ import {
   LeadResponse,
   NewActivity,
   NewLead,
+  NotificationListQuery,
+  NotificationPageResponse,
   ResponseStats,
   TeamStatsResponse,
   type ServerEvent,
   UserId,
+  UnreadResponse,
   UserListResponse,
 } from '../src/contract.ts'
 import { responseStats } from '../src/domain/inbox.ts'
 import { newestFirst } from '../src/domain/speedToLead.ts'
 import { teamStats } from '../src/domain/team.ts'
 import { suggestNextAction } from '../src/domain/suggest.ts'
-import { decodeCursor, pageContacted } from './paging.ts'
+import { markRead, notificationsFor, unreadCount } from './notifications.ts'
+import { decodeCursor, page, pageContacted } from './paging.ts'
 import { LEAD_SAMPLES } from './samples.ts'
 import { seed } from './seed.ts'
 import { appendActivity, claimLead, createLead, type Data, releaseLead, type Store } from './store.ts'
@@ -295,6 +299,34 @@ export function createApp(deps: AppDeps) {
     const userId = UserId.safeParse(header)
     return userId.success ? deps.store.findUser(userId.data) : undefined
   }
+
+  // Notifications for the signed-in salesperson (A21, ADR-007).
+  app.get('/notifications/unread', (c) => {
+    const user = currentUser(c.req.header('x-user-id'))
+    if (!user) return c.json(error('unauthenticated', 'Unknown or missing x-user-id'), 401)
+    return c.json(send(UnreadResponse, { unread: unreadCount(deps.store.read(), user.id) }))
+  })
+
+  app.get('/notifications', (c) => {
+    const user = currentUser(c.req.header('x-user-id'))
+    if (!user) return c.json(error('unauthenticated', 'Unknown or missing x-user-id'), 401)
+    const query = NotificationListQuery.safeParse(c.req.query())
+    if (!query.success) return c.json(error('validation_failed', query.error.message), 400)
+    const after = query.data.cursor === undefined ? null : decodeCursor(query.data.cursor)
+    if (after === null && query.data.cursor !== undefined) {
+      return c.json(error('validation_failed', 'cursor is not one this server returned'), 400)
+    }
+    const data = deps.store.read()
+    const { items, nextCursor } = page(notificationsFor(data, user.id), (n) => n, after, query.data.limit)
+    return c.json(send(NotificationPageResponse, { notifications: items, nextCursor, lastReadAt: data.reads[user.id] ?? null }))
+  })
+
+  app.post('/notifications/read', async (c) => {
+    const user = currentUser(c.req.header('x-user-id'))
+    if (!user) return c.json(error('unauthenticated', 'Unknown or missing x-user-id'), 401)
+    await update((data) => ({ data: markRead(data, user.id, nowIso()), value: undefined }))
+    return c.json(send(UnreadResponse, { unread: unreadCount(deps.store.read(), user.id) }))
+  })
 
   app.post('/leads/:leadId/claim', async (c) => {
     const user = currentUser(c.req.header('x-user-id'))

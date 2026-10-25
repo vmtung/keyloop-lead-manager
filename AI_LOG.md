@@ -373,3 +373,22 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   small sample data unless a test asks for the history; the end-to-end tests run on the full data.
 - **Caught while writing the test:** the slowest generated first contact could land a minute in the
   future. History now starts three hours back, and a test checks no activity is after now.
+
+## 20. Notifications: bell, pop-ups and sound
+
+- **Ask:** A notification sound, a pop-up and a bell with a lazily loaded list, with seeded history.
+- **AI output:** spec first: A21 (a new lead notifies everyone; a teammate's activity notifies the
+  lead's owner), AC-11.1 to 11.5, three endpoints, and ADR-007. It proposed storing notifications
+  on the server in the same write as their cause, and read state as one time per person, so
+  marking everything read is one write; I agreed, accepting that one item can't be marked unread.
+  No new event type: the existing ones trigger a refetch of the unread count. The starting data
+  derives a notification for every lead and every teammate follow-up, about 5,800, with the
+  newest three unread. The pop-up isn't a live region, because the inbox already announces new
+  leads; the chime is made with Web Audio, off by default, and remembered per browser.
+- **Caught by the tests:** the pop-up's 8-second timer ignored fake timers turned on after it
+  started; the test now switches them on before the lead arrives.
+- **Caught on a phone:** the bell pushed the user picker 46 px off the top bar. On a phone the
+  live status shows as its dot (the word stays for screen readers) and the gaps are tighter. Both
+  widths fit, and axe reports no violations with the list open.
+- **Verified by breaking the code four ways:** not marking read on open, making the pop-ups a live
+  region, sound on by default, and teammate notifications going to everyone. Each failed its test.
