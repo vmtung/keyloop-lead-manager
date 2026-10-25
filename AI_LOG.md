@@ -1,394 +1,174 @@
 # AI Collaboration Log
 
-A running record of how AI was used on this project, kept as we go. Each entry: **ask → AI output →
-my decision → why**.
-
-Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
+How AI was used on this project, kept as we went. Each entry: **ask → AI output → my decision →
+why**, plus what was caught and how. Primary tool: Claude Code (Claude Opus) in the Claude desktop
+app.
 
 ---
 
 ## 1. Scope cut
 
-- **Ask:** Read the brief, propose MUST vs NICE, then a stage plan. No code until I approve.
-- **AI output:** MUST: the three core requirements polished, speed-to-lead logic (timers, urgency
-  sort, overdue flag), optimistic activity logging with rollback, a mock server that injects latency
-  and failures, a live SSE lead feed, keyboard triage and accessibility, basic observability.
-  NICE, in order: claim/lock conflict, OpenTelemetry to Jaeger, a stubbed next-action suggestion.
-  Cut: offline queue and presence. It pointed out that cutting presence is what makes SSE (one-way)
-  the right choice over WebSockets.
-- **Decision:** Approved as proposed, including the libraries: TanStack Query, React Router, Zod,
-  Hono mock server, native EventSource, Vitest + Testing Library, plain CSS.
-- **Why:** A finished, polished core beats a long half-built feature list. The cut features still
-  appear in the design doc as future work.
+- **Ask:** Read the brief, propose must-haves and nice-to-haves, then a stage plan. No code until I
+  approve.
+- **AI output:** Must: the three core requirements, speed-to-lead logic, optimistic logging with
+  rollback, a mock server that injects latency and failures, a live lead feed, keyboard and
+  accessibility, basic observability. Nice, in order: claiming, OpenTelemetry, a stubbed next-step
+  suggestion. Cut: an offline queue and presence. It pointed out that cutting presence is what makes
+  one-way SSE the right choice over WebSockets.
+- **Decision:** Approved as proposed. A finished core beats a long half-built list; the cuts are in
+  the design doc as future work.
 
-## 2. Stage 0 setup, and two problems caught by running things
+## 2. Setup: guards that only looked done
 
-- **AI output:** Scaffolded with `create-vite` (React + TS), turned on extra strict flags, added
-  Vitest and Testing Library, removed the demo assets.
-- **Problem 1:** The first test run crashed inside `undici`. Cause: the latest jsdom (30) requires
-  Node ≥ 22.22, and this machine runs 22.13. pnpm installed it anyway without complaint.
-  **Fix:** pinned jsdom to 29.1.1, which supports Node 22.13.
-- **Problem 2:** To stop that class of bug, the AI added `engine-strict=true` to `.npmrc`. Instead
-  of assuming it worked, it re-ran the bad install to test the guard: pnpm 11 ignored the setting
-  and installed jsdom 30 again. It moved the setting to `pnpm-workspace.yaml` (`engineStrict: true`),
-  re-ran, and the install was now refused.
-- **Also checked:** oxlint printed nothing on a clean run, so a file with a deliberate violation was
-  added to prove the linter actually scans `src/`. It flagged both problems; the file was removed.
-- **Why it matters:** Both guards looked done after the edit. Only running the failure case showed
-  one of them was not.
+- jsdom 30 crashed on the installed Node 22.13, and pnpm installed it without complaint. The AI
+  added `engine-strict` to `.npmrc`, then re-ran the bad install to test the guard rather than
+  assume it: pnpm 11 ignored it. Moved to `pnpm-workspace.yaml`, re-ran, refused.
+- oxlint printed nothing on a clean run, so a planted violation proved it actually scans `src/`.
+- **Why it matters:** both guards looked finished after the edit. Only running the failure case
+  showed one wasn't.
 
-## 3. Stage 1: specs, contract and ADRs
+## 3. Specs, contract and ADRs
 
-- **Ask:** Write assumptions, acceptance criteria and the API contract, plus ADRs for the key
-  decisions. Treat `specs/` as the source of truth from here on.
-- **AI output:** 17 assumptions, 35 acceptance criteria with IDs that tests will reference, the
-  contract as Zod schemas in `src/contract.ts` with an endpoint spec, and four ADRs (stack, SSE,
-  mock server, optimistic logging with client-generated IDs).
-- **Product calls the AI made, flagged for my review:** a 15-minute first-response target; status
-  derived from the activity log instead of stored; an unanswered call counts as a response; every
-  activity needs a summary; the log reads oldest first.
-- **Verified:** ran valid and malformed payloads through the schemas (bad date, unknown enum,
-  whitespace-only summary, unknown event type) before relying on them.
-- **Found:** the latest React Router (8) also needs Node ≥ 22.22, the same constraint that hit jsdom.
-  Recorded in ADR-001.
-- **Decision:** ✅ Approved all five product calls. Upgraded to Node 24 LTS instead of pinning
-  around old Node: jsdom is back on 30 (reversing the pin from entry 2), React Router 8 is
-  available, and the mock server can run TypeScript without an experimental flag.
-- **Why:** Two libraries hitting the same limit was a sign the runtime was the problem, not the
-  libraries. Pinning would have kept costing us at every new dependency.
+- **AI output:** assumptions, acceptance criteria with IDs for tests to cite, the contract as Zod
+  schemas, and ADRs for the stack, SSE, the mock server and optimistic logging. Malformed payloads
+  were run through the schemas before relying on them.
+- **Product calls it flagged for me:** a 15-minute target, status derived from the log, an
+  unanswered call counting as a response. I approved all of them.
+- **Decision:** React Router 8 hit the same Node limit as jsdom, so I upgraded to Node 24 instead of
+  pinning around it. Two libraries hitting one limit meant the runtime was the problem.
 
-## 4. Stage 2: the core build
+## 4. The core build
 
-- **Ask:** Build MUST 1–4 and 6: inbox, detail, activity logging with optimistic rollback,
-  speed-to-lead logic, mock server with fault injection, keyboard and accessibility.
-- **AI output:** Domain rules as pure functions, a Hono mock server, an API client that parses every
-  response, and the React UI in the "achromatic ledger" style dealt by the design skill (ink chrome,
-  colour only on the SLA signal). Integration tests run the real mock server in-process instead of
-  hand-written fetch stubs, so they exercise the actual contract.
-- **My decisions:** lucide-react for icons and self-hosted Geist (no Google Fonts request), after
-  the AI listed the options with trade-offs.
-- **Caught by running it, not by reading it:**
-  - The preview tool sets `PORT=5173`; the mock server read the generic `PORT` and took Vite's port.
-    Renamed to `MOCK_API_PORT` and made Vite's port strict, so a clash fails loudly.
-  - Testing Library wasn't cleaning up between tests, because Vitest runs without globals.
-  - With failures on, Retry left the restored text in the composer, inviting a double submit. Retry
-    now clears it.
-  - On a phone the h1 disappeared with the hidden inbox, and the details card pushed the composer
-    off screen. The open lead now owns the h1, and phone and email moved to the header.
-- **Caught in review of the AI's own work:** a composer closure that could never see text typed after
-  submitting (replaced with a ref), and a placeholder test for AC-1.4 that asserted nothing. Both
-  rewritten; the failure-path test now drives a real 500 and a real Retry.
-- **Verified:** 89 tests; mutation checks on the SLA boundaries and on Retry reusing the activity ID
-  (each broken on purpose, each caught). In the browser with `MOCK_FAILURE_RATE=0.5`: four injected
-  500s, then a 201, one activity stored, and client and server logs matched by request ID.
-- **Kept against a design-lint finding:** `example.com` emails. RFC 2606 reserves the domain so
-  fictional data can never reach a real inbox.
+- **AI output:** domain rules as pure functions, a Hono mock server, an API client that parses every
+  response, the UI, and integration tests that run the real server in-process instead of fetch
+  stubs. I chose the icon and font packages from options it laid out.
+- **Caught by running it:** the preview tool's `PORT` hijacked the mock server's port; Retry left the
+  restored text in the box, inviting a double submit; on a phone the composer was pushed off screen.
+- **Caught reviewing its own code:** a placeholder test that asserted nothing, and a closure that
+  could never see text typed after submitting.
+- **Verified:** breaking the SLA boundaries and the ID reuse on Retry made their tests fail. In the
+  browser with half of requests failing: four 500s, then a 201, one activity stored.
 
-## 5. Stage 3: live updates
+## 5. Live updates: two bugs only a real browser showed
 
-- **Ask:** New leads appear live, another salesperson's activity shows up, and a dropped connection
-  recovers and catches up (AC-5.1–5.3).
-- **AI output:** `subscribeToEvents` at the API boundary (events parsed against the contract,
-  reconnect with backoff, a status for the UI), and a provider that turns thin events into cache
-  invalidations, a screen-reader announcement and a brief highlight. For tests, an `EventSource`
-  that reads the in-process server's real SSE stream, so the server's emit, the wire format and the
-  UI are tested together.
-- **Verified:** tests first for the subscription (red, then green); mutation checks on the resume
-  refetch and on lead events (both caught). In the browser: a simulated lead appeared and was
-  announced; an activity logged in one tab showed in a second tab; with the API killed and
-  restarted, the UI said so and recovered by itself.
-- **Caught by running it in a real browser, missed by every test:**
-  - The indicator stuck on "Connecting…": Vite's proxy held the stream's headers until the first
-    body bytes, 15 seconds later. The server now writes a comment the moment a stream opens.
-  - With the API killed, both tabs still said "Live": the proxy kept the browser's side of a dead
-    connection open, with no error event. The keep-alive was an SSE comment, which scripts never
-    see. It is now a named `ping` event, and a client watchdog treats 35 seconds of silence as a
-    drop. Re-tested: "Reconnecting…" after 35 s, back to "Live" 8 s after the restart.
-- **Why it matters:** the in-process tests skip the proxy hop, which is exactly where both bugs
-  lived. That is the case for the Playwright test in Stage 5, and for checking what the AI built in
-  the real environment rather than trusting green tests.
+- **AI output:** an event subscriber with reconnect and backoff, and a test `EventSource` that reads
+  the server's real stream.
+- **Caught in the browser, missed by every test:** the status stuck on "Connecting…" because Vite's
+  proxy held the response until the first bytes; and with the server killed, the app still said
+  "Live", because the proxy kept a dead connection open. Fixed with an immediate first write, a
+  named ping every 15 s and a 35 s watchdog.
+- **Why it matters:** the in-process tests skip the proxy, which is where both bugs lived. That made
+  the case for the Playwright test.
 
-## 6. Stage 4: observability
+## 6. Observability
 
-- **Ask:** Web Vitals, error capture, and logs that can be followed across client and server.
-- **AI output:** Listed the choices with trade-offs; I chose the `web-vitals` package over a
-  hand-rolled INP, shipping client logs to a new `POST /api/logs` over console-only, and moving
-  OpenTelemetry to after hardening. The spec gained the endpoint and AC-7.6 before any code. Built:
-  a batching log shipper (sendBeacon when the page hides), a session ID on every entry, page-level
-  and pane-level error boundaries that show a reference the user can quote, and global handlers for
-  uncaught errors and rejections.
-- **Verified:** tests first for the shipper and the endpoint; a mutation check removing the pane
-  boundary (caught). In the browser, a 404 produced a server line and a client line in the same
-  terminal with the same request ID, and all five vitals arrived.
-- **Caught by running it:** on every reload, requests the browser aborted were logged as `network`
-  failures, false errors that would fill a dashboard. The AI's first fix (a flag set on `pagehide`)
-  passed its unit test but failed in the browser: the aborts land *before* `pagehide`. The test had
-  modelled the wrong order. Network failures are now logged one task later, after `pagehide` has
-  had its chance; re-tested in the browser with no false errors.
-- **Also corrected:** the AI first guessed that missing LCP and CLS were a quirk of the background
-  browser pane. A later run showed all five vitals arriving, so the guess was wrong, and it was not
-  recorded as a finding.
+- **Decisions:** from options it listed, the `web-vitals` package, shipping client logs to a
+  `/api/logs` endpoint, and OpenTelemetry later.
+- **Caught:** reloads logged aborted requests as failures. The AI's first fix passed its unit test
+  and failed in the browser: the test modelled the wrong event order. Logging now waits one task.
+- **Corrected:** it guessed missing vitals were a quirk of the hidden browser pane, then doubted
+  it. Measured later: paint metrics don't report from a hidden tab, so the guess was right.
 
-## 7. Stage 5: hardening and review
+## 7. Hardening
 
-- **Code review (AI reviewing its own code, 9 findings, all fixed):** the important one was data
-  loss. A save that failed after the salesperson had moved to the next lead disappeared: no error,
-  no announcement, text gone. Failure handling lived in per-call callbacks that don't run once the
-  component unmounts. Failures now live in the mutation cache: announced from anywhere, marked
-  "Not saved" in the inbox, restored with Retry on return (AC-4.8, added to the spec after the fact
-  and said so here). Others: no timeout while the stream was still connecting, an SSE listener leak,
-  raw server text shown to salespeople, a client log field able to overwrite the server timestamp.
-- **Accessibility:** axe-core (injected for the audit, not a dependency) on every view and state,
-  plus a manual keyboard pass. Fixed a skipped heading level, an unnamed user picker on phones,
-  touch targets under 44 px, and added a skip link past the inbox.
-- **End-to-end:** one Playwright journey through the real proxy and SSE stream. Mutation check:
-  removing the server's connect flush (the Stage 3 bug) makes it fail. It first passed locally and
-  failed on CI: locally it had reused my dev server, whose latency hid an ambiguous locator. Then the
-  design screenshots showed its test leads in my dev inbox. Both from the same shortcut; e2e now
-  always starts its own servers on separate ports with a fresh data file.
-- **Design critique:** the screenshots caught the skip link showing at rest, which the keyboard check
-  (focused state only) had passed. Fixed; activity icons lost their tinted circles.
-- **Production numbers:** 132 KB gzipped JS (react-dom 66, zod 26, app 10.5). LCP 330–700 ms on the
-  production build in a visible tab, bound by the mock API's latency, not the bundle. Paint metrics
-  don't report from a hidden tab, which is why the browser pane had shown none: the earlier guess
-  in entry 6 was right after all, for the wrong reason.
-- **Process note:** several bugs this stage passed one kind of check and failed another (unit test
-  vs browser, keyboard vs visual, local vs CI). Checking the same thing from two angles was what
-  caught them.
+- **Its own code review found data loss:** a save that failed after moving to another lead vanished
+  silently. Failures now live in the mutation cache: announced, flagged "Not saved" in the inbox,
+  restored on return (AC-4.8, added to the spec afterwards, and said so).
+- **Accessibility:** axe on every view plus a keyboard pass. A screenshot caught the skip link
+  showing at rest, which the keyboard check had passed.
+- **End-to-end:** the Playwright test passed locally and failed on CI, because locally it reused my
+  dev server. It now starts its own servers and data.
+- **Pattern:** the bugs that mattered passed one check and failed another: unit test and browser,
+  keyboard and screenshot, my machine and CI.
 
-## 8. Stage 6: documentation
+## 8. Documentation
 
-- **Ask:** The design doc (diagram, components, data flow, technology choices, observability, how
-  GenAI helped) and the README (build, run, test, AI Collaboration Narrative), with no AI-sounding
-  prose.
-- **AI output:** `docs/design.md` with five Mermaid diagrams, and the README in my voice.
-- **Checked before committing:** the AI fact-checked its own draft against the repo and corrected
-  the test counts by level, which it had first got wrong. It removed sentences that overclaimed on
-  my behalf ("I watched…", "I can explain every file") and a timeline mention I had asked to keep
-  out. It rendered every diagram in headless Chrome: one failed to parse, because Mermaid reads
-  `;` as a statement separator in sequence messages.
-- **Decision:** the narrative claims only what the log shows. Lines that are mine to say in the
-  interview stay out of the README.
+- The AI fact-checked its own drafts against the repo: wrong test counts, sentences claiming things
+  on my behalf, and a Mermaid diagram that failed to render. The narrative claims only what this log
+  shows.
 
-## 9. NICE 1: claiming a lead
+## 9. Claiming a lead
 
-- **Ask:** Let a salesperson claim a lead, with a conflict when two claim the same one. The AI asked
-  whether the first call should claim the lead automatically; I didn't answer, so it went with its
-  recommendation (yes) and said so, leaving it as a one-line spec change if I disagree.
-- **AI output:** spec first (assumption A18, AC-8.1–8.6, contract, ADR-005), then server tests,
-  then code. ADR-005 compares a version number with a conditional update on the claim itself and
-  picks the latter: a version would fail a claim whenever an unrelated activity was logged.
-- **The type system did review work:** adding the claim to the contract made the compiler list every
-  place affected, including an exhaustive `switch` over error codes that refused to build until the
-  new codes had a user-facing message. The AI also found a gap: the switch over live event types had
-  no exhaustiveness check, so a new event would have been ignored silently. It added one and proved
-  it by removing a case and watching the build fail.
-- **Verified:** server tests red then green, including two claims sent at the same moment (exactly
-  one wins); a mutation removing the "already claimed" check failed both conflict tests; an
-  integration test reproduces losing the race before the other claim's event arrives. In the
-  browser, Tom claimed in one tab and Anna's tab updated by itself. axe: no violations. A data file
-  from before claims still loads.
+- **AI output:** spec first, then ADR-005: a conditional update on the claim, not a version number,
+  which would fail a claim whenever someone logged a note. It asked whether the first call should
+  claim the lead; I didn't answer, so it took its recommendation and said so.
+- **The compiler did review work:** the new error codes broke an exhaustive switch until each had a
+  message, and the AI added the same check to live events after finding one missing.
+- **Verified:** two claims at the same moment, exactly one wins; removing the check failed both
+  conflict tests.
 
-## 10. NICE 3: suggested next action (AIME stand-in)
+## 10. Suggested next step (AIME stand-in)
 
-- **Ask:** A stubbed suggestion that shows where Keyloop's AIME would plug in, without pretending to
-  be AI.
-- **AI output:** spec first (A19, AC-9.1–9.3), four rules as a pure function with tests first, the
-  server returning the suggestion with the lead, and a "Use" button that only fills the composer,
-  labelled "Rules-based stand-in for AIME". The salesperson stays the author of every activity.
-- **Caught by the compiler:** adding `suggestion` to the contract broke the cache update after a
-  save. Keeping the old suggestion would have shown "Suggested: Call" right after the call was
-  logged; the fix clears it and refetches.
-- **Caught by a mutation check:** the test for that fix passed even with the fix removed. The live
-  stream's own refetch was clearing the suggestion first, which happens to be the usual order but
-  isn't guaranteed. The test now drops the live connection before saving, and fails without the fix.
+- Four rules as a pure function, labelled as a stand-in. **Use** only fills the composer.
+- **Caught by breaking the fix:** the test for clearing a stale suggestion passed without the fix,
+  because a live refetch usually got there first. The test now drops the connection and fails
+  without the fix.
 
-## 11. NICE 2: OpenTelemetry traces to Jaeger
+## 11. Tracing to Jaeger
 
-- **Ask (after approving 8 pinned packages and Docker):** one trace from a click to the server's
-  write, in a traced mode only, with the normal bundle unchanged.
-- **AI output:** spec first (AC-7.7). The server records spans through the OpenTelemetry API, which
-  does nothing until traced mode registers the SDK, so there is one code path. The browser loads
-  tracing behind a build-time flag; the normal build was checked to contain no OpenTelemetry code.
-- **Found while installing:** npm marked the approved 2.12 packages deprecated three days earlier,
-  when OpenTelemetry 3.0 merged them. Kept the approved, older set and recorded the move to 3.x as
-  future work rather than jump to a three-day-old major.
-- **Caught by running it, missed by the tests:**
-  - `pnpm dev` ran every script matching `/^dev:/`, so the new `dev:traced` started itself again.
-    The pattern now names exactly `dev:web` and `dev:api`.
-  - The first real trace held only the browser's span. The API client had bound `window.fetch` at
-    startup, before tracing patched it, so requests carried no `traceparent`. Confirmed in the page
-    before changing anything; the client now looks `fetch` up on every call. The server's unit test
-    (a hand-written `traceparent`) passed throughout, because the bug was on the other side.
-  - A trace showed 270 ms on the server and 1.6 ms of real work. The gap was the mock's injected
-    latency, now its own span so the trace explains itself.
-- **Verified:** read the trace back from Jaeger's API (browser span, its POST, the server request,
-  latency, write, emit), and screenshotted Jaeger's view for the docs.
+- **Ask:** one trace from a click to the file write, with nothing added to the normal bundle.
+- **Caught by running it:** the first trace had only the browser's span. The API client had bound
+  `fetch` before tracing patched it. The server's unit test passed throughout, because the bug was on
+  the other side. Also: 270 ms on the server was mostly the mock's injected delay, now its own span.
+- **Later:** tracing moved from a start-up flag to a switch in the demo tools, off by default. It
+  checks Jaeger answers before switching on, and says to start it if not.
+- **Verified:** read the trace back from Jaeger's API; the production bundle has no tracing code.
 
 ## 12. Test audit
 
-- **Ask:** Audit the tests themselves.
-- **AI output:** a traceability map of all 47 criteria to the tests that cite them, then a code
-  review of the test files. Ten findings; all fixed:
-  - A blanket `console.error` silencer could hide a React crash inside a passing test. Replaced with
-    a guard in the test setup that fails any test on unexpected console output, allowing only the
-    app's own JSON log lines. Proved by planting a stray `console.error`: the test failed.
-  - Missing tests for three things that had been verified only by hand: resubmitting restored text
-    reuses the failed ID, the API client uses the `fetch` that traced mode patches later, and the
-    page-lifecycle wiring (logs flushed on hide, unload flag, global error handlers). The wiring was
-    extracted from `setup.ts` so it could be tested. Each new test was checked by breaking the code.
-  - Flakiness and weak assertions: sample data was timed from module load, an absence was checked
-    after a fixed 50 ms sleep, a server test checked `length > 0`, and AC-2.3 tested the clock but
-    not the label it drives.
-- **Found a real defect through a test that couldn't fail:** the first version of the AC-1.3
-  check measured CLS, and it passed even with a planted 300 px jump. Measuring showed why: the
-  header is a small part of the viewport, so that jump scored 0.016 against a 0.1 threshold.
-  Rewriting it to compare where the skeleton and the real list start exposed a real 24 px jump: the
-  line under the title appeared only once data arrived. Fixed by reserving its line. It can still
-  wrap to two lines at tablet width.
-- **Why it matters:** a test is only evidence if it fails when the code is wrong. Every new test in
-  this pass was shown to fail first.
+- **Ask:** audit the tests themselves. Ten findings, all fixed.
+- A blanket `console.error` silencer could hide a crash in a passing test; now any unexpected
+  console output fails it. Three behaviours checked only by hand got tests, each shown to fail.
+- **A test that couldn't fail found a real bug:** the layout-shift check passed with a planted
+  300 px jump. Its replacement compares positions directly and found a real 24 px jump.
 
-## 13. Design pass with the taste skill
+## 13. Design pass
 
-- **Ask:** The UI looks bland; use the design skill to improve it, and find more improvements
-  beyond the four I picked.
-- **AI output:** inspected the before state first. The inspector's measures named the blandness:
-  40% of the first screen empty, half the text under 13 px, no headline figure, people as plain
-  text. It proposed changes that each show real data rather than decoration; I chose all four and
-  asked for more. Built, with spec and tests first for the logic:
-  - three figures in the inbox header: waiting now, share answered within 15 minutes over 24 hours,
-    and the median first reply (AC-1.6);
-  - a clock bar on each waiting row, and "late" on contacted leads that missed the target (AC-1.7);
-  - "Next up" in the empty pane, the longest-waiting unclaimed lead with the queue after it (AC-3.7);
-  - initials in a stable tint per salesperson;
-  - from its own critique: the wait as the lead's headline figure, Call as the primary action
-    (AC-3.8), a timeline line in the activity log, and 13 px small text.
-- **Second critique round, from screenshots:** truncated figure labels, broken spacing in the owner
-  text, two red marks for one fact on overdue rows (the bars now use a softer tint), the wait figure
-  floating above the name, and names wrapping in the queue cards. All fixed.
-- **Caught by the tests:** the layout-jump test from the test audit failed on the redesign. The
-  figures' loading placeholder was 4 px shorter than the loaded values. Fixed with exact heights.
-- **Verified:** 163 tests, both e2e tests, axe with no violations at desktop and phone widths, and
-  impeccable's detector clean.
+- **Ask:** the UI looked bland. The design skill measured why first: 40% of the screen empty, no
+  headline figure. It proposed changes that each show data: the three inbox figures, a clock bar per
+  waiting lead, Next up, the wait as the lead's headline, Call as the primary action.
+- **Caught by the tests:** the redesign brought back a 4 px loading jump.
 
-## 14. Demo tools panel
+## 14. Demo tools
 
-- **Ask:** A cog button in the bottom-right corner with the simulate actions, so the demo doesn't
-  need the command line.
-- **AI output:** dev endpoints on the mock server (new lead, reset, drop streams, read and change
-  faults), exempt from fault injection so a flaky API can always be switched back; a panel with a
-  new website lead, a teammate's call and claim on the next lead, dropping the live connection,
-  the API mode, and reset. Specced in the API contract, tests first for the endpoints.
-- **Development builds only:** the panel loads behind `import.meta.env.DEV`. Scanning the
-  production bundle found the API client's dev methods still in it; they were moved behind the
-  same check, and the rescan came back clean.
-- **Test harness gap found:** the test version of `EventSource` did nothing when the *server*
-  closed a stream, unlike a browser, which reports an error and reconnects. Fixed, then checked
-  by disabling the server's drop: the test failed.
-- **Verified in the browser:** "Reconnecting…" 52 ms after a drop and "Live" again about 3 s
-  later, instead of the 35-second watchdog wait. The video script's demo now uses the panel.
+- A development-only panel to simulate leads, teammates, a dropped connection, a slow or flaky API,
+  and reset. A scan of the production bundle found the client's dev methods still in it; moved
+  behind the same check and rescanned clean. The test `EventSource` didn't model a server closing
+  the stream; fixed and shown to fail without it.
 
-## 15. Tracing switch in the demo tools
+## 15. Chaos test for saving
 
-- **Ask:** Jaeger showed no traces, because the app was started with `pnpm dev`, not
-  `pnpm dev:traced`. Keep tracing off by default, but let me switch it on from the cog.
-- **AI output:** spec first (AC-7.7 and two dev endpoints). The server holds the switch: the first
-  switch-on loads and registers the SDK, and a sampler checks the switch on every span, so off
-  means nothing is recorded. The browser loads its tracing chunk when the server says tracing is
-  on, and unregisters it when switched off. `dev:traced` and its build-time flag were removed, so
-  there is one way to turn tracing on.
-- **Failure made explicit:** switching on first sends Jaeger an empty batch. If Jaeger doesn't
-  answer, the endpoint returns 503, the panel says to run `pnpm traces:up`, and tracing stays off,
-  rather than collecting spans that can't be delivered.
-- **Verified:** tests for the switch, the endpoints and the panel, each shown to fail by breaking
-  the sampler and the browser's stop path. In the browser, switched on, logged a call, and read
-  one trace back from Jaeger's API with the browser's `activity.log` and POST and the server's
-  request, injected latency, write and emit. Switched off, a request produced no spans. The
-  production bundle still contains no OpenTelemetry or demo code.
+- Fifty follow-ups through the real composer while half the saves fail: the request lost, the
+  response lost after the server stored it, or a 500. Each is retried. The server must end with
+  exactly fifty.
+- **Verified by breaking it three ways:** a new ID on Retry (58 saved), on resubmit (59), and the
+  server ignoring IDs (64). Seeded, so a failure replays exactly.
 
-## 16. Chaos test for saving a follow-up
+## 16. Scale: a month of history and lazy loading
 
-- **Ask:** A test that hammers the save path, to back up "no lost or duplicated follow-ups" with
-  evidence.
-- **AI output:** one integration test through the real composer and the in-process server. Fifty
-  follow-ups; half the saves fail in one of three ways: the request is lost, the response is lost
-  after the server stored the activity (the case a careless retry would duplicate), or a 500. Each
-  failure is retried with Retry or by logging the restored text again, chosen at random. The test
-  harness gained a way to lose a request or its response. The random choices are seeded, so a
-  failure replays exactly, and the test asserts every kind of failure happened, so it can't pass
-  by luck.
-- **Verified by breaking the code three ways:** Retry sending a new ID (58 activities instead of
-  50), logging the restored text with a new ID (59), and the server ignoring IDs (64). Each
-  failed; with the code restored it passed five runs in a row, in under five seconds.
-- **Also found:** the design doc's test table still had the counts from before the tracing switch.
-  Corrected.
+- **AI output:** it flagged first that paging breaks more than the list: the figures, Next up and the
+  row clocks all needed every lead. Approved plan (ADR-006): waiting leads in full, contacted ones 50
+  at a time with a keyset cursor, figures from the server, live events moving one row instead of
+  refetching pages. `content-visibility` over a virtualised list, measured first.
+- The mock now starts with 5,000 contacted leads of history. Generating it, the slowest first
+  contact could land in the future; a test now checks none does.
+- **Measured:** first load from 2.4 MB to 25 KB; with all 5,005 rows loaded, layout after a jump
+  16 ms (22 ms without `content-visibility`).
 
-## 17. Scale: 5,000 leads and lazy loading
+## 17. Team view
 
-- **Ask:** Show the inbox at a dealership's real size, with the list loading lazily.
-- **AI output:** it flagged first that paging breaks more than the list: the figures, Next up and
-  the row clocks all worked on the full list in the browser. Proposed, and I approved: waiting
-  leads load in full (few and urgent), contacted leads 50 at a time with a keyset cursor, the
-  24-hour figures move to a server endpoint built on the same domain function, and live events
-  patch one row instead of refetching every page. ADR-006 records it. For rendering it proposed
-  `content-visibility: auto` over a virtualised list, to avoid a dependency, and to measure first.
-- **Spec and tests first:** AC-1.8 and AC-5.4, the paged endpoints, and tests for the cursor
-  (including a lead contacted mid-scroll), the placement rules, Load more by mouse and by `j`, a
-  failed page, a live update that must not refetch pages, and a reconnect.
-- **Caught by the tests:** focus after Load more went nowhere, because it was moved before React had
-  rendered the new rows. It now moves after the render.
-- **Verified by breaking the code three ways:** refetching pages instead of placing the lead,
-  keeping all pages after a reconnect, and `j` skipping Load more. Each failed its test.
-- **Measured in the browser,** with all 5,005 contacted leads loaded by scrolling: 43,000 DOM nodes,
-  142 MB heap, layout after a jump 16 ms with `content-visibility` and 22 ms without. The first
-  load went from one 2.4 MB response to 25 KB. Server side, a page takes about 25 ms and a save
-  14 ms with the 5.1 MB data file. Recorded in the design doc, with virtualisation as the next step.
+- Speed to lead per salesperson, credited to whoever made first contact (A20).
+- **Caught on a phone:** the new links pushed the user picker off the top bar, and the table
+  scrolled sideways. Both fixed at 375 px.
+- **Caught by the tests:** my expected figures were wrong, not the code; corrected after checking
+  the seed.
 
-## 18. Team view
+## 18. Notifications
 
-- **Ask:** A manager's view of speed to lead per salesperson.
-- **AI output:** spec first: A20 (credit goes to whoever made the first contact, even on a lead
-  someone else claimed, because the customer heard back from them) and AC-10.1 to 10.3. A pure
-  `teamStats` in `src/domain`, sharing the median and share maths with the inbox figures, served
-  by `GET /api/stats/team`. A `/team` page with Leads and Team links in the top bar. It refreshes
-  with the inbox's live updates, because its query sits under the same cache key.
-- **Caught by running it on a phone:** the two new links pushed the user picker off the top bar,
-  and the table needed sideways scrolling. On a phone the logo now stands for the product name
-  (still the link's accessible name), and the table drops avatars and wraps its headers. Both fit
-  at 375 px, and axe reports no violations at either width.
-- **Caught by the tests:** my first expectations had Anna on nothing for the day; the sample data
-  has her answering Aisha 24 minutes in, so the test was wrong, not the code. Corrected after
-  checking the seed.
-- **Verified by breaking the code:** crediting the claimer instead of the first responder, and not
-  refreshing the team figures on a live change. Each failed its test.
-
-## 19. A month of history by default
-
-- **Ask:** Seed the data to its full potential, and stop cleaning the leads up.
-- **AI output:** the mock now starts with, and resets to, the sample leads plus a month of history:
-  5,000 contacted leads with varied messages, registrations, a first contact each and up to three
-  follow-ups (calls, emails, texts, notes, appointments), some by a teammate. The separate "Load
-  5,000 leads" action and its endpoint went, since the default now does that job. Tests keep the
-  small sample data unless a test asks for the history; the end-to-end tests run on the full data.
-- **Caught while writing the test:** the slowest generated first contact could land a minute in the
-  future. History now starts three hours back, and a test checks no activity is after now.
-
-## 20. Notifications: bell, pop-ups and sound
-
-- **Ask:** A notification sound, a pop-up and a bell with a lazily loaded list, with seeded history.
-- **AI output:** spec first: A21 (a new lead notifies everyone; a teammate's activity notifies the
-  lead's owner), AC-11.1 to 11.5, three endpoints, and ADR-007. It proposed storing notifications
-  on the server in the same write as their cause, and read state as one time per person, so
-  marking everything read is one write; I agreed, accepting that one item can't be marked unread.
-  No new event type: the existing ones trigger a refetch of the unread count. The starting data
-  derives a notification for every lead and every teammate follow-up, about 5,800, with the
-  newest three unread. The pop-up isn't a live region, because the inbox already announces new
-  leads; the chime is made with Web Audio, off by default, and remembered per browser.
-- **Caught by the tests:** the pop-up's 8-second timer ignored fake timers turned on after it
-  started; the test now switches them on before the lead arrives.
-- **Caught on a phone:** the bell pushed the user picker 46 px off the top bar. On a phone the
-  live status shows as its dot (the word stays for screen readers) and the gaps are tighter. Both
-  widths fit, and axe reports no violations with the list open.
-- **Verified by breaking the code four ways:** not marking read on open, making the pop-ups a live
-  region, sound on by default, and teammate notifications going to everyone. Each failed its test.
+- **AI output:** spec and ADR-007 first. Notifications are stored in the same write as their cause,
+  and read state is one time per person, so "mark all read" is one write; I accepted losing
+  "mark one unread". The pop-up isn't a live region, because the inbox already announces new leads.
+  Sound is off by default.
+- **Caught on a phone:** the bell pushed the user picker 46 px off screen; fixed.
+- **Verified by breaking it four ways:** not marking read, pop-ups announced twice, sound on by
+  default, and teammate notifications going to everyone. Each failed its test.
