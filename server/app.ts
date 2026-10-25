@@ -24,12 +24,14 @@ import {
   NewActivity,
   NewLead,
   ResponseStats,
+  TeamStatsResponse,
   type ServerEvent,
   UserId,
   UserListResponse,
 } from '../src/contract.ts'
 import { responseStats } from '../src/domain/inbox.ts'
 import { newestFirst } from '../src/domain/speedToLead.ts'
+import { teamStats } from '../src/domain/team.ts'
 import { suggestNextAction } from '../src/domain/suggest.ts'
 import { decodeCursor, pageContacted } from './paging.ts'
 import { scale } from './scale.ts'
@@ -274,6 +276,11 @@ export function createApp(deps: AppDeps) {
       return c.json(error('validation_failed', 'cursor is not one this server returned'), 400)
     }
     return c.json(send(LeadPageResponse, pageContacted(leads, after, query.data.limit)))
+  })
+
+  app.get('/stats/team', (c) => {
+    const { leads, activities, users } = deps.store.read()
+    return c.json(send(TeamStatsResponse, { people: teamStats(leads, activities, users, now().getTime()) }))
   })
 
   app.get('/stats', (c) =>

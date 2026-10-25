@@ -26,6 +26,11 @@ export function responseStats(leads: readonly Lead[], now: number): ResponseStat
       responses.push(s.responseMs)
     }
   }
+  return summariseResponses(responses)
+}
+
+/** Count, share within the target, and median of a set of first-response times. */
+export function summariseResponses(responses: readonly number[]): ResponseStats {
   return {
     answered: responses.length,
     withinTargetShare:
@@ -34,7 +39,7 @@ export function responseStats(leads: readonly Lead[], now: number): ResponseStat
   }
 }
 
-function median(values: number[]): number | null {
+function median(values: readonly number[]): number | null {
   if (values.length === 0) return null
   const sorted = [...values].sort((a, b) => a - b)
   const mid = Math.floor(sorted.length / 2)

@@ -1,5 +1,5 @@
 import { Gauge } from 'lucide-react'
-import { Link, Navigate, Outlet, Route, Routes, useParams } from 'react-router'
+import { Link, Navigate, NavLink, Outlet, Route, Routes, useParams } from 'react-router'
 import { useCurrentUser } from './app/context.tsx'
 import { ErrorBoundary } from './app/ErrorBoundary.tsx'
 import { useShortcuts } from './app/useShortcuts.ts'
@@ -9,6 +9,7 @@ import { LeadInbox } from './leads/LeadInbox.tsx'
 import { NextUp } from './leads/NextUp.tsx'
 import { Avatar } from './leads/Avatar.tsx'
 import { LiveIndicator } from './leads/live.tsx'
+import { TeamView } from './team/TeamView.tsx'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route index element={<Navigate to="/leads" replace />} />
         <Route path="leads" element={<LeadsScreen />} />
         <Route path="leads/:leadId" element={<LeadsScreen />} />
+        <Route path="team" element={<TeamView />} />
         <Route path="*" element={<Navigate to="/leads" replace />} />
       </Route>
     </Routes>
@@ -33,6 +35,10 @@ function Shell() {
           <span className="brand__name">Lead Manager</span>
           <span className="brand__scope">Kingsway Motors, Leeds</span>
         </Link>
+        <nav className="nav" aria-label="Main">
+          <NavLink to="/leads" className="nav__link">Leads</NavLink>
+          <NavLink to="/team" className="nav__link">Team</NavLink>
+        </nav>
         <div className="topbar__end">
           <LiveIndicator />
           <UserSwitcher />

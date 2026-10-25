@@ -16,6 +16,7 @@ import {
   LeadListResponse,
   LeadPageResponse,
   ResponseStats,
+  TeamStatsResponse,
   ServerEvent,
 } from '../src/contract.ts'
 import { createApp, type Faults } from './app.ts'
@@ -24,6 +25,7 @@ import { seed } from './seed.ts'
 import { openStore } from './store.ts'
 import { newestFirst } from '../src/domain/speedToLead.ts'
 import { responseStats } from '../src/domain/inbox.ts'
+import { teamStats } from '../src/domain/team.ts'
 import { TracingUnavailable, type TracingSwitch } from './tracing.ts'
 
 const NOW = new Date('2026-10-22T09:00:00.000Z')
@@ -130,6 +132,20 @@ describe('reading leads', () => {
       expect(ApiErrorResponse.parse(await res.json()).error.code).toBe('validation_failed')
     },
   )
+
+  test('AC-10.1: GET /api/stats/team gives each salesperson their figures, and a first contact counts at once', async () => {
+    const { app } = await setup()
+    const before = TeamStatsResponse.parse(await (await app.request('/api/stats/team')).json())
+    const data = seed(NOW)
+    expect(before.people).toEqual(teamStats(data.leads, data.activities, data.users, NOW.getTime()))
+    expect(before.people).toHaveLength(3)
+
+    // Anna's first call on a waiting lead (3 minutes in) is credited to her straight away.
+    await postActivity(app, { id: crypto.randomUUID(), type: 'call', summary: 'Called' })
+    const after = TeamStatsResponse.parse(await (await app.request('/api/stats/team')).json())
+    const anna = (r: typeof after) => r.people.find((p) => p.user.id === 'anna')!
+    expect(anna(after).answered).toBe(anna(before).answered + 1)
+  })
 
   test('AC-1.6: GET /api/stats gives the 24-hour figures over every lead', async () => {
     const { app } = await setup()

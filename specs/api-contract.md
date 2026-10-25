@@ -21,6 +21,7 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 | `GET /users` | | 200 `UserListResponse` | |
 | `GET /leads?group=awaiting` | | 200 `LeadListResponse`: every lead awaiting response, longest-waiting first | 400 `validation_failed` |
 | `GET /leads?group=contacted&cursor=…&limit=…` | | 200 `LeadPageResponse`: contacted leads newest first, `limit` (1–100, default 50) at a time from `cursor` | 400 `validation_failed` (missing group, bad cursor or limit) |
+| `GET /stats/team` | | 200 `TeamStatsResponse`: per salesperson, the 24-hour figures for leads they answered first, and the waiting leads they have claimed (AC-10.1) | |
 | `GET /stats` | | 200 `ResponseStats`: leads first answered in the last 24 hours, the share within the target, and the median first response (AC-1.6) | |
 | `GET /leads/:leadId` | | 200 `LeadDetailResponse`, activities oldest first, plus `suggestion` (A19) | 404 `not_found` |
 | `POST /leads/:leadId/activities` | `NewActivity` | 201 `CreateActivityResponse` (new) or 200 (same ID replayed) | 400 `validation_failed`, 401 `unauthenticated`, 404 `not_found`, 409 `idempotency_conflict` |

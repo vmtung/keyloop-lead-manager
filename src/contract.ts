@@ -101,6 +101,14 @@ export const ResponseStats = z.object({
   medianResponseMs: z.number().nonnegative().nullable(),
 })
 export type ResponseStats = z.infer<typeof ResponseStats>
+/** Per salesperson (AC-10.1): the 24-hour figures for leads they answered first, and their waiting load. */
+export const TeamMemberStats = ResponseStats.extend({
+  user: User,
+  claimedWaiting: z.int().nonnegative(),
+  claimedOverdue: z.int().nonnegative(),
+})
+export type TeamMemberStats = z.infer<typeof TeamMemberStats>
+export const TeamStatsResponse = z.object({ people: z.array(TeamMemberStats) })
 /** A suggested next step from the rules-based AIME stand-in (specs A19). Never acted on by itself. */
 export const Suggestion = z.object({
   type: ActivityType,

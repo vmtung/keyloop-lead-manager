@@ -102,3 +102,11 @@ AI_LOG).
 | AC-9.1 | The lead shows a suggested next step from the rules in A19, with its reason, labelled as a rules-based stand-in for AIME. | unit, integration |
 | AC-9.2 | **Use** fills the composer with the suggested type and a draft summary. Nothing is logged until the salesperson submits. | integration |
 | AC-9.3 | With no suggestion (an appointment is booked, or the lead was contacted recently), nothing is shown. | unit, integration |
+
+## 10. Team view
+
+| ID | Criterion | Test |
+|---|---|---|
+| AC-10.1 | `/team` shows one row per salesperson: leads they answered first in the last 24 hours (credited as in A20), the share of those within the 15-minute target, their median first response, and the waiting leads they have claimed now, with how many are overdue. Busiest first. With nothing to measure, a figure shows a dash. | unit, integration |
+| AC-10.2 | The top bar links to **Leads** and **Team** and marks the current one. | integration |
+| AC-10.3 | The team view updates without a reload when a lead changes, and refreshes every minute as the window slides. While loading it reserves its space; a failed load shows an error and **Retry**. | integration |

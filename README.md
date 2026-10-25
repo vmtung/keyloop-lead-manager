@@ -20,6 +20,10 @@ salesperson can log a new follow-up from the same screen.
 - **Built for weak signal.** A follow-up shows at once and saves in the background. If the save
   fails, the text comes back with Retry, even if the salesperson has moved on to another lead.
   Retrying cannot create a duplicate.
+- **Team view.** Speed to lead per salesperson over the last day, credited to whoever made first
+  contact, with the waiting leads each person has claimed.
+- **Dealership-sized.** Waiting leads load in full; contacted ones load 50 at a time as you scroll.
+  The demo tools can load 5,000 leads to show it.
 - **Keyboard and screen reader.** `j` and `k` move through leads, `c` jumps to the composer, and
   status changes are announced.
 
@@ -32,7 +36,7 @@ made slow or unreliable on purpose.
 |---|---|
 | [System design](docs/design.md) | Architecture, data flow, technology choices, observability, scale, and how GenAI helped with the design |
 | [Assumptions](specs/assumptions.md) | Where the brief was open, what was decided and why |
-| [Acceptance criteria](specs/acceptance-criteria.md) | 53 criteria; tests cite them by ID |
+| [Acceptance criteria](specs/acceptance-criteria.md) | 56 criteria; tests cite them by ID |
 | [API contract](specs/api-contract.md) | Endpoints, events and fault injection; schemas in [`src/contract.ts`](src/contract.ts) |
 | [Decision records](docs/adr/) | Stack, server-sent events, mock backend, optimistic logging, claiming, paging the inbox |
 | [AI collaboration log](AI_LOG.md) | Each step with the AI: what I asked, what it produced, what I decided |
@@ -89,7 +93,7 @@ Stop Jaeger with `pnpm traces:down`.
 pnpm test
 ```
 
-206 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+215 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
@@ -123,6 +127,7 @@ src/
   domain/         speed-to-lead rules as pure functions
   api/            the API client and the event stream: all parsing happens here
   leads/          inbox, lead detail, activity log, composer, live updates
+  team/           speed to lead per salesperson
   observability/  structured logs, log shipping, Web Vitals
 server/           mock API (Hono): REST, events, idempotent writes, fault injection
 e2e/              the Playwright journey
@@ -183,5 +188,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-206 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+215 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

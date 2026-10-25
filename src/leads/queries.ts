@@ -23,6 +23,7 @@ export const leadKeys = {
   awaiting: () => ['leads', 'awaiting'] as const,
   contacted: () => ['leads', 'contacted'] as const,
   stats: () => ['leads', 'stats'] as const,
+  team: () => ['leads', 'team'] as const,
   detail: (id: LeadId) => ['leads', 'detail', id] as const,
 }
 
@@ -46,6 +47,17 @@ export function useContactedLeads() {
     queryFn: ({ pageParam, signal }) => api.listContacted(pageParam, signal),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextCursor,
+  })
+}
+
+/** Per salesperson (AC-10.1). Under `leads`, so anything that refreshes leads refreshes this too. */
+export function useTeamStats() {
+  const api = useApi()
+  return useQuery({
+    queryKey: leadKeys.team(),
+    queryFn: ({ signal }) => api.getTeamStats(signal),
+    select: (data) => data.people,
+    refetchInterval: 60_000,
   })
 }
 
@@ -128,6 +140,7 @@ export function placeLead(queryClient: QueryClient, lead: Lead) {
   )
   queryClient.setQueryData<ContactedPages>(leadKeys.contacted(), (old) => old && placeInContacted(old, lead, joined))
   void queryClient.invalidateQueries({ queryKey: leadKeys.stats() })
+  void queryClient.invalidateQueries({ queryKey: leadKeys.team() })
 }
 
 /**

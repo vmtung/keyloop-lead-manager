@@ -78,6 +78,13 @@ The brief leaves these open. Each is a decision we can defend, and each names wh
   3. The last contact attempt is over 24 hours old: follow up by SMS.
   4. Otherwise: no suggestion.
 
+## Team view
+
+- **A20. A lead's first response is credited to whoever made the first contact attempt,** even if
+  someone else had claimed it. Speed to lead measures how fast the customer heard back, so the person
+  who answered is the honest owner of that number. The team view uses the same 24-hour window and
+  15-minute target as the inbox figures.
+
 ## Only if time allows (specced before building)
 
 - Browser OpenTelemetry traces exported to Jaeger

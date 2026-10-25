@@ -15,6 +15,7 @@ import {
   LeadListResponse,
   LeadPageResponse,
   ResponseStats,
+  TeamStatsResponse,
   LeadResponse,
   type NewActivity,
   type UserId,
@@ -126,6 +127,7 @@ export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false
         { signal },
       ),
     getStats: (signal?: AbortSignal) => request('/stats', ResponseStats, { signal }),
+    getTeamStats: (signal?: AbortSignal) => request('/stats/team', TeamStatsResponse, { signal }),
     getLead: (id: LeadId, signal?: AbortSignal) =>
       request(`/leads/${id}`, LeadDetailResponse, { signal }),
     createActivity: (leadId: LeadId, activity: NewActivity, userId: UserId) =>

@@ -96,6 +96,14 @@ textarea { caret-color: var(--data); }
 
 .topbar__end { display: flex; align-items: center; gap: 20px; }
 
+.nav { display: flex; gap: 4px; margin-right: auto; margin-left: 12px; }
+.nav__link {
+  display: inline-flex; align-items: center; height: 32px; padding: 0 10px; border-radius: var(--radius-control);
+  color: var(--muted); font-weight: 500; text-decoration: none;
+}
+.nav__link:hover { background: var(--raised); color: var(--text); }
+.nav__link[aria-current='page'] { background: var(--active); color: var(--text); }
+
 .live { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--fs-small); }
 .live__dot { width: 6px; height: 6px; border-radius: 999px; background: var(--control); }
 .live--live .live__dot { background: var(--positive); }
@@ -367,6 +375,23 @@ kbd {
   border-radius: 4px; background: var(--surface); color: var(--text); font: 500 12px/18px var(--font); text-align: center;
 }
 
+/* Team view (AC-10.1). */
+.team { flex: 1; min-height: 0; overflow-y: auto; padding: var(--pad); background: var(--ground); }
+.team__title { margin-bottom: 4px; font-size: var(--fs-title); font-weight: 600; letter-spacing: -0.01em; }
+.team__scroll { max-width: 880px; margin-top: 16px; overflow-x: auto; border-radius: var(--radius-card); }
+.team__table {
+  width: 100%; min-width: 560px; border-collapse: collapse;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card);
+}
+.team__table th, .team__table td { height: 52px; padding: 0 16px; border-bottom: 1px solid var(--rule); text-align: left; }
+.team__table thead th { height: 40px; color: var(--muted); font-size: var(--fs-label); font-weight: 500; }
+.team__table tbody tr:last-child > * { border-bottom: 0; }
+.team__table tbody th { font-weight: 500; }
+.team__table .team__num { text-align: right; white-space: nowrap; }
+.team__person { display: inline-flex; align-items: center; gap: 10px; }
+.team__overdue { color: var(--negative); font-weight: 500; }
+.team__bar { display: inline-block; width: 64px; }
+
 /* The end of the contacted list (AC-1.8). Rows off screen skip layout and paint, so thousands of
    loaded rows stay cheap without a virtualised list (ADR-006). */
 .lead-list > li { content-visibility: auto; contain-intrinsic-size: auto 64px; }
@@ -443,4 +468,16 @@ a.demo__action { color: inherit; text-decoration: none; }
   .composer__hint { visibility: hidden; }
   .segmented { display: grid; grid-template-columns: repeat(5, auto); align-self: stretch; }
   .segmented__option span { padding: 12px 4px; text-align: center; }
+  /* Room for Leads and Team: the logo stands for the name, which stays the link's accessible name. */
+  .brand__name {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+  .topbar, .topbar__end { gap: 12px; }
+  .nav { margin-left: 0; }
+  .nav__link { height: 44px; padding: 0 8px; }
+  .team { padding: 16px; }
+  .team__table { min-width: 0; }
+  .team__table th, .team__table td { padding: 0 8px; }
+  .team__table thead th, .team__table thead .team__num { white-space: normal; line-height: 16px; }
+  .team__person .avatar { display: none; }
 }

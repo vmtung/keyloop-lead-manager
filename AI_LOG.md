@@ -344,3 +344,21 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   142 MB heap, layout after a jump 16 ms with `content-visibility` and 22 ms without. The first
   load went from one 2.4 MB response to 25 KB. Server side, a page takes about 25 ms and a save
   14 ms with the 5.1 MB data file. Recorded in the design doc, with virtualisation as the next step.
+
+## 18. Team view
+
+- **Ask:** A manager's view of speed to lead per salesperson.
+- **AI output:** spec first: A20 (credit goes to whoever made the first contact, even on a lead
+  someone else claimed, because the customer heard back from them) and AC-10.1 to 10.3. A pure
+  `teamStats` in `src/domain`, sharing the median and share maths with the inbox figures, served
+  by `GET /api/stats/team`. A `/team` page with Leads and Team links in the top bar. It refreshes
+  with the inbox's live updates, because its query sits under the same cache key.
+- **Caught by running it on a phone:** the two new links pushed the user picker off the top bar,
+  and the table needed sideways scrolling. On a phone the logo now stands for the product name
+  (still the link's accessible name), and the table drops avatars and wraps its headers. Both fit
+  at 375 px, and axe reports no violations at either width.
+- **Caught by the tests:** my first expectations had Anna on nothing for the day; the sample data
+  has her answering Aisha 24 minutes in, so the test was wrong, not the code. Corrected after
+  checking the seed.
+- **Verified by breaking the code:** crediting the claimer instead of the first responder, and not
+  refreshing the team figures on a live change. Each failed its test.

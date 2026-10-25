@@ -11,7 +11,7 @@ Requirements and decisions live in the repository, and this document links to th
 repeating them:
 
 - [`specs/assumptions.md`](../specs/assumptions.md): 17 assumptions where the brief was open
-- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 53 criteria with IDs that tests cite
+- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 56 criteria with IDs that tests cite
 - [`specs/api-contract.md`](../specs/api-contract.md) and [`src/contract.ts`](../src/contract.ts): the API
 - [`docs/adr/`](adr/): six architecture decision records
 
@@ -77,7 +77,7 @@ proxy matters: two of the live-update bugs lived in it (section 6).
 | Event subscriber | `src/api/events.ts` | Owns the `EventSource`: parses events against the contract, reconnects with backoff, and treats 35 s of silence as a dropped connection. |
 | Server state | `src/leads/queries.ts` | TanStack Query hooks. Logging an activity is a mutation whose pending and failed states live in the mutation cache, so they outlive any one screen. |
 | Live updates | `src/leads/live.tsx` | Turns each event into cache invalidations, a screen-reader announcement and a brief highlight on new leads. |
-| Screens | `src/leads/*.tsx`, `src/App.tsx` | Inbox with its speed-to-lead figures and a clock bar per waiting lead; "Next up" when no lead is open; lead detail with the wait as its headline and Call as its primary action; claim line, activity timeline, composer. Two-pane on desktop, one pane at a time on a phone. |
+| Screens | `src/leads/*.tsx`, `src/App.tsx` | Inbox with its speed-to-lead figures and a clock bar per waiting lead; "Next up" when no lead is open; lead detail with the wait as its headline and Call as its primary action; claim line, activity timeline, composer. Two-pane on desktop, one pane at a time on a phone. A team view (`src/team/`) shows the same figures per salesperson. |
 | Observability | `src/observability/`, `src/app/ErrorBoundary.tsx` | Structured logs with session and user, Web Vitals, error boundaries, global error handlers, log shipping. |
 | Mock API | `server/` | REST, SSE, log intake, idempotent writes, conditional claims, fault injection, JSON-file persistence. |
 | Demo tools | `src/dev/` | Development builds only: a panel that triggers the mock's simulations (new lead, a teammate's call or claim, a dropped connection, API mode, reset) through dev endpoints. Vite drops it and the client's dev methods from production builds. |
@@ -292,7 +292,7 @@ the app runs. Logging an activity then produces one trace across both services (
 |---|---|
 | Traces | The tracing above, always on with sampling, the OpenTelemetry collector in front of the vendor, and `traceparent` replacing `x-request-id` as the correlation key, so one trace runs from the click through the gateway to the database. |
 | Logs | The `/api/logs` intake becomes an OpenTelemetry collector or a vendor intake; the client code keeps its shape. Customer names, phone numbers and emails stay out of logs, as they do now. |
-| Business metrics | Share of leads answered within 15 minutes, median and 90th-percentile response time, overdue leads right now, per dealership and per salesperson. Speed to lead is the number the product exists to move, so it should be on a dashboard, not only in the UI. |
+| Business metrics | Share of leads answered within 15 minutes, median and 90th-percentile response time, overdue leads right now, per dealership and per salesperson. The team view is the in-app start: per salesperson over 24 hours, computed by the server from the same domain functions. Speed to lead is the number the product exists to move, so it belongs on a dashboard too, with history. |
 | Real-user monitoring | Web Vitals by route and device, against Google's thresholds (LCP under 2.5 s, INP under 200 ms, CLS under 0.1). |
 | Alerts | Error rate on activity saves, SSE reconnect rate (a spike points at a proxy or deploy), and a rise in overdue leads, which says more about the dealership's day than about the software. |
 
@@ -341,9 +341,9 @@ What changes past this scale (assumption A7: tens to low hundreds of open leads 
 
 | Level | Count | What it covers |
 |---|---|---|
-| Unit | 99 | SLA boundaries, suggestion rules, response time, inbox order, placing a changed lead in the loaded pages, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
-| Server | 62 | Every endpoint and error code, paging with a cursor that survives a lead added mid-scroll, idempotency, claims including two at once, trace propagation and the tracing switch, persistence, fault injection, SSE framing, log intake |
-| Integration | 45 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race, using a suggestion, the demo tools, a chaos test for saving, and paging through 5,000 leads |
+| Unit | 103 | SLA boundaries, suggestion rules, response time, inbox order, crediting first responses per salesperson, placing a changed lead in the loaded pages, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
+| Server | 63 | Every endpoint and error code, paging with a cursor that survives a lead added mid-scroll, idempotency, claims including two at once, trace propagation and the tracing switch, persistence, fault injection, SSE framing, log intake |
+| Integration | 49 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race, using a suggestion, the demo tools, a chaos test for saving, paging through 5,000 leads, and the team view |
 | End-to-end | 2 | A lead arrives live, a call is logged, and it survives a reload, in Chrome, through the real proxy and SSE stream; and the list doesn't move when data replaces the loading skeleton |
 
 Test names cite acceptance criteria (`AC-4.4: …`). Several tests were checked by breaking the code
