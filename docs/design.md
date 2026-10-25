@@ -316,14 +316,20 @@ What changes past this scale (assumption A7: tens to low hundreds of open leads 
 | Level | Count | What it covers |
 |---|---|---|
 | Unit | 91 | SLA boundaries, suggestion rules, response time, inbox order, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
-| Server | 48 | Every endpoint and error code, idempotency, claims including two at once, trace propagation, persistence, fault injection, SSE framing, log intake |
-| Integration | 37 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race, using a suggestion, and the demo tools |
+| Server | 53 | Every endpoint and error code, idempotency, claims including two at once, trace propagation and the tracing switch, persistence, fault injection, SSE framing, log intake |
+| Integration | 40 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race, using a suggestion, the demo tools, and a chaos test for saving |
 | End-to-end | 2 | A lead arrives live, a call is logged, and it survives a reload, in Chrome, through the real proxy and SSE stream; and the list doesn't move when data replaces the loading skeleton |
 
 Test names cite acceptance criteria (`AC-4.4: …`). Several tests were checked by breaking the code
 on purpose and confirming they fail: the SLA boundaries, Retry and resubmitting reusing the activity
 ID, the resume refetch, the pane error boundary, the claim condition, the clock tick, the page
 lifecycle wiring, the late-bound `fetch`, and the server's stream flush for the end-to-end test.
+The chaos test logs 50 follow-ups through the real composer while half the saves fail: the request
+lost on the way, the response lost after the server stored the activity, or a 500. It retries each
+failure with Retry or by logging the restored text again, and checks the server ends with exactly 50
+activities. It is seeded, so a failure replays exactly, and it fails if either retry path sends a
+new ID or the server stops checking IDs.
+
 Unexpected console errors or warnings fail any test, so a React error can't hide in a passing one. CI runs
 lint, typecheck, all tests, the build and the end-to-end test on every push.
 

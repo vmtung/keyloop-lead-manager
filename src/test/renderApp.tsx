@@ -33,6 +33,9 @@ export class Network {
   private gate: Promise<void> | null = null
   private release: (() => void) | null = null
   failing: ((url: string, init?: RequestInit) => boolean) | null = null
+  /** Loses a request on the way to the server, or its response on the way back (after the
+   * server has acted on it): both reach the client as a dropped connection. */
+  losing: ((url: string, init?: RequestInit) => 'request' | 'response' | null) | null = null
   readonly requests: { url: string; init: RequestInit | undefined }[] = []
 
   private holding: (url: string, init?: RequestInit) => boolean = () => true
@@ -73,7 +76,11 @@ export async function renderApp({ route = '/leads', data = (d) => d, network: se
         status: 500,
       })
     }
-    return server.fetch(new Request(new URL(url, 'http://test'), init))
+    const lost = network.losing?.(url, init) ?? null
+    if (lost === 'request') throw new TypeError('Failed to fetch')
+    const response = await server.fetch(new Request(new URL(url, 'http://test'), init))
+    if (lost === 'response') throw new TypeError('Failed to fetch')
+    return response
   }
 
   const live = new LiveStream(async (url) => server.fetch(new Request(new URL(url, 'http://test'))))

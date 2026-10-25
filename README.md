@@ -89,7 +89,7 @@ Stop Jaeger with `pnpm traces:down`.
 pnpm test
 ```
 
-183 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+184 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
@@ -183,5 +183,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-183 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+184 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

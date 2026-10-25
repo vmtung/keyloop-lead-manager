@@ -306,3 +306,20 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   one trace back from Jaeger's API with the browser's `activity.log` and POST and the server's
   request, injected latency, write and emit. Switched off, a request produced no spans. The
   production bundle still contains no OpenTelemetry or demo code.
+
+## 16. Chaos test for saving a follow-up
+
+- **Ask:** A test that hammers the save path, to back up "no lost or duplicated follow-ups" with
+  evidence.
+- **AI output:** one integration test through the real composer and the in-process server. Fifty
+  follow-ups; half the saves fail in one of three ways: the request is lost, the response is lost
+  after the server stored the activity (the case a careless retry would duplicate), or a 500. Each
+  failure is retried with Retry or by logging the restored text again, chosen at random. The test
+  harness gained a way to lose a request or its response. The random choices are seeded, so a
+  failure replays exactly, and the test asserts every kind of failure happened, so it can't pass
+  by luck.
+- **Verified by breaking the code three ways:** Retry sending a new ID (58 activities instead of
+  50), logging the restored text with a new ID (59), and the server ignoring IDs (64). Each
+  failed; with the code restored it passed five runs in a row, in under five seconds.
+- **Also found:** the design doc's test table still had the counts from before the tracing switch.
+  Corrected.
