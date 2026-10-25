@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, test } from 'vitest'
 import { claimLead } from '../server/store.ts'
 import type { IsoDateTime, LeadId, UserId } from './contract.ts'
+import { scale } from '../server/scale.ts'
 import { LEADS, renderApp } from './test/renderApp.tsx'
 
 
@@ -43,7 +44,7 @@ describe('inbox', () => {
 
   test('AC-1.4: a failed load shows an error, and Retry refetches', async () => {
     const { network } = await renderApp({
-      network: (n) => (n.failing = (url) => url.endsWith('/api/leads')),
+      network: (n) => (n.failing = (url) => url.includes('/api/leads?group=awaiting')),
     })
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('Couldn’t load leads. The server had a problem.')
@@ -304,7 +305,7 @@ describe('live updates', () => {
 
     // Created while we're disconnected: its event is lost, so nothing refetches and it can't appear.
     expect((await postLead(ELLIE)).status).toBe(201)
-    expect(network.requests.slice(requestsAtDrop).filter((r) => r.url.endsWith('/api/leads'))).toEqual([])
+    expect(network.requests.slice(requestsAtDrop).filter((r) => r.url.includes('/api/leads?'))).toEqual([])
     expect(screen.queryByText('Ellie Turner')).not.toBeInTheDocument()
 
     await act(async () => {
@@ -437,5 +438,83 @@ describe('inbox figures and next up', () => {
 
     await userEvent.click(within(next).getByRole('link', { name: /Open lead/ }))
     expect(await screen.findByRole('heading', { level: 1, name: 'Hannah Okafor' })).toBeInTheDocument()
+  })
+})
+
+describe('a dealership-sized inbox (ADR-006)', () => {
+  const contactedRows = () => within(region('Contacted')).getAllByRole('link')
+  const isPage = (url: string) => url.includes('group=contacted') && url.includes('cursor=')
+
+  async function renderScaled() {
+    const utils = await renderApp({ data: (d) => scale(d, new Date()) })
+    await waitFor(() => expect(contactedRows()).toHaveLength(50))
+    return utils
+  }
+
+  test('AC-1.8: contacted leads load 50 at a time, the heading shows the total, and Load more brings the next page', async () => {
+    await renderScaled()
+    expect(within(region('Contacted')).getByRole('heading')).toHaveTextContent('Contacted 5,005')
+    expect(within(region('Awaiting response')).getAllByRole('link')).toHaveLength(3)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    await waitFor(() => expect(contactedRows()).toHaveLength(100))
+    // Focus goes to the first new lead, so a keyboard user carries on from where they were.
+    expect(contactedRows()[50]).toHaveFocus()
+  })
+
+  test('AC-1.8: j reaches Load more after the last loaded lead', async () => {
+    await renderScaled()
+    contactedRows().at(-1)!.focus()
+    await userEvent.keyboard('j')
+    expect(screen.getByRole('button', { name: 'Load more' })).toHaveFocus()
+  })
+
+  test('AC-1.8: a page that fails to load says so in place and keeps the leads loaded; Retry loads it', async () => {
+    const { network } = await renderScaled()
+    network.failing = (url) => isPage(url)
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    expect(await within(region('Contacted')).findByRole('alert')).toHaveTextContent('Couldn’t load more leads.')
+    expect(contactedRows()).toHaveLength(50)
+
+    network.failing = null
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(contactedRows()).toHaveLength(100))
+    expect(within(region('Contacted')).queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  test('AC-5.4: a lead a teammate contacts moves into place without refetching the pages loaded', async () => {
+    const { network, server } = await renderScaled()
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    await waitFor(() => expect(contactedRows()).toHaveLength(100))
+    const pagesBefore = network.requests.filter((r) => isPage(r.url)).length
+
+    const res = await server.fetch(
+      new Request(`http://test/api/leads/${LEADS.hannahOverdue38min}/activities`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-user-id': 'tom' },
+        body: JSON.stringify({ id: crypto.randomUUID(), type: 'call', summary: 'Called' }),
+      }),
+    )
+    expect(res.status).toBe(201)
+
+    // Hannah is newer than every contacted lead, so she goes to the top of the list.
+    await waitFor(() => expect(rowNames(region('Contacted'))[0]).toBe('Hannah Okafor'))
+    expect(rowNames(region('Awaiting response'))).not.toContain('Hannah Okafor')
+    expect(within(region('Contacted')).getByRole('heading')).toHaveTextContent('Contacted 5,006')
+    expect(contactedRows()).toHaveLength(101)
+    expect(network.requests.filter((r) => isPage(r.url))).toHaveLength(pagesBefore)
+  })
+
+  test('AC-5.4: after a reconnect the contacted list restarts from its first page', async () => {
+    const { live } = await renderScaled()
+    await screen.findByText('Live')
+    await userEvent.click(screen.getByRole('button', { name: 'Load more' }))
+    await waitFor(() => expect(contactedRows()).toHaveLength(100))
+
+    act(() => live.drop())
+    await act(async () => {
+      void live.reconnect()
+    })
+    await waitFor(() => expect(contactedRows()).toHaveLength(50))
   })
 })

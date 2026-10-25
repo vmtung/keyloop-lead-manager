@@ -69,6 +69,14 @@ export type Activity = z.infer<typeof Activity>
 
 // Requests
 
+export const LeadGroup = z.enum(['awaiting', 'contacted'])
+export type LeadGroup = z.infer<typeof LeadGroup>
+export const LeadListQuery = z.object({
+  group: LeadGroup,
+  cursor: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+})
+
 export const NewActivity = Activity.pick({ id: true, type: true, summary: true })
 export type NewActivity = z.infer<typeof NewActivity>
 
@@ -79,6 +87,20 @@ export type NewLead = z.infer<typeof NewLead>
 
 export const UserListResponse = z.object({ users: z.array(User) })
 export const LeadListResponse = z.object({ leads: z.array(Lead) })
+/** One page of contacted leads (ADR-006). `nextCursor` is opaque; null on the last page. */
+export const LeadPageResponse = z.object({
+  leads: z.array(Lead),
+  nextCursor: z.string().min(1).nullable(),
+  total: z.int().nonnegative(),
+})
+export type LeadPageResponse = z.infer<typeof LeadPageResponse>
+/** The 24-hour figures (AC-1.6), computed by the server over every lead. */
+export const ResponseStats = z.object({
+  answered: z.int().nonnegative(),
+  withinTargetShare: z.number().min(0).max(1).nullable(),
+  medianResponseMs: z.number().nonnegative().nullable(),
+})
+export type ResponseStats = z.infer<typeof ResponseStats>
 /** A suggested next step from the rules-based AIME stand-in (specs A19). Never acted on by itself. */
 export const Suggestion = z.object({
   type: ActivityType,
@@ -148,3 +170,5 @@ export const DropStreamsResponse = z.object({ dropped: z.int().nonnegative() })
 
 export const DevTracing = z.object({ enabled: z.boolean() })
 export type DevTracing = z.infer<typeof DevTracing>
+
+export const DevScaleResponse = z.object({ total: z.int().nonnegative() })

@@ -11,9 +11,9 @@ Requirements and decisions live in the repository, and this document links to th
 repeating them:
 
 - [`specs/assumptions.md`](../specs/assumptions.md): 17 assumptions where the brief was open
-- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 51 criteria with IDs that tests cite
+- [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 53 criteria with IDs that tests cite
 - [`specs/api-contract.md`](../specs/api-contract.md) and [`src/contract.ts`](../src/contract.ts): the API
-- [`docs/adr/`](adr/): five architecture decision records
+- [`docs/adr/`](adr/): six architecture decision records
 
 ## 1. Context
 
@@ -162,7 +162,7 @@ sequenceDiagram
   participant B as Browser
   W->>A: POST /api/leads
   A-->>B: SSE data: {"type":"lead.created","leadId":"…"}
-  B->>A: GET /api/leads (invalidated query refetches)
+  B->>A: GET /api/leads?group=awaiting (invalidated query refetches)
   A-->>B: leads
   Note over B: New row highlighted for 8 s,<br/>"New lead from Ellie Turner: Test drive." announced
 ```
@@ -171,8 +171,14 @@ Events carry IDs only (ADR-002). The client refetches what changed, so the REST 
 way data reaches the cache and the client never merges state from two sources. The cost is one
 extra request per event, which is nothing at a dealership's volume.
 
-There is no event replay. After a dropped connection the client refetches everything cached, which
-is simple and correct at this scale.
+A new lead is always waiting, and the waiting list is small, so that list is refetched whole. Any
+other event fetches just the lead it names and moves its row into place: out of the waiting list,
+into the loaded contacted pages at its sorted position, or nowhere if it sorts below them (ADR-006).
+The data still comes from the REST API; only the placement is the client's. Refetching every loaded
+page instead would be one request per page, a hundred for someone who has scrolled to the end.
+
+There is no event replay. After a dropped connection the client refetches what it holds, and the
+contacted list restarts from its first page, since missed events could have moved any loaded row.
 
 ### Two salespeople claiming the same lead
 
@@ -301,11 +307,31 @@ Measured on the production build:
   customer's message, which waits for the API, so LCP follows the mock's simulated latency of 150
   to 600 ms rather than the bundle.
 
+### At 5,000 leads
+
+The inbox pages (ADR-006): every waiting lead loads at once, contacted leads 50 at a time, newest
+first, with a keyset cursor, and the 24-hour figures come from the server. The demo tools' **Load
+5,000 leads** adds a month of contacted history. Measured against the mock with its injected latency
+off:
+
+| | Before paging | Now |
+|---|---|---|
+| First load | One 2.4 MB response (about 470 bytes a lead) | Waiting leads 1.4 KB, one page 23.6 KB, figures 80 bytes |
+| A live event | Refetch of the whole list | One lead, placed in the loaded pages |
+| A page, server side | n/a | About 25 ms: the mock sorts all 5,005 contacted leads per request. An index makes it constant. |
+| Saving a follow-up | 14 ms, including rewriting the 5.1 MB JSON file | The same; a database removes the rewrite |
+
+In Chrome, with all 5,005 rows loaded by scrolling: 43,000 DOM nodes and a 142 MB JS heap. Rows use
+`content-visibility: auto`, so the browser skips laying out the ones off screen. Layout after
+jumping to a random point in the list takes 16 ms (median of 30) with it and 22 ms without, and the
+first full layout without it took 148 ms. Times were measured as forced layout, not frames, with
+the browser pane in the background. A virtualised list, keeping only visible rows in the DOM, is
+the next step if anyone really scrolls through thousands; the ADR says why it wasn't the first.
+
 What changes past this scale (assumption A7: tens to low hundreds of open leads per dealership):
 
 | Pressure | Change |
 |---|---|
-| More than about 500 open leads | Filter by status on the server, cursor pagination, and list virtualisation. The client already sorts a plain array, so this is an API change more than a UI one. |
 | Many dealerships | A dealership ID on every lead and event, streams scoped to it, and the user's dealerships from Keyloop's identity provider. |
 | Many tabs per user | One `EventSource` per tab hits the browser's six-connections-per-host limit on HTTP/1.1; HTTP/2 removes it. |
 | More than one server instance | Events come from the lead service's event bus instead of an in-process emitter, so any instance can serve any stream. |
@@ -315,9 +341,9 @@ What changes past this scale (assumption A7: tens to low hundreds of open leads 
 
 | Level | Count | What it covers |
 |---|---|---|
-| Unit | 91 | SLA boundaries, suggestion rules, response time, inbox order, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
-| Server | 53 | Every endpoint and error code, idempotency, claims including two at once, trace propagation and the tracing switch, persistence, fault injection, SSE framing, log intake |
-| Integration | 40 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race, using a suggestion, the demo tools, and a chaos test for saving |
+| Unit | 99 | SLA boundaries, suggestion rules, response time, inbox order, placing a changed lead in the loaded pages, formatting, error messages, the API client's failure types, the log shipper, the event subscriber's reconnect and watchdog |
+| Server | 62 | Every endpoint and error code, paging with a cursor that survives a lead added mid-scroll, idempotency, claims including two at once, trace propagation and the tracing switch, persistence, fault injection, SSE framing, log intake |
+| Integration | 45 | The whole app against the real mock server running in-process (no hand-written fetch stubs), including a real SSE stream parser, the error boundaries, a lost claim race, using a suggestion, the demo tools, a chaos test for saving, and paging through 5,000 leads |
 | End-to-end | 2 | A lead arrives live, a call is logged, and it survives a reload, in Chrome, through the real proxy and SSE stream; and the list doesn't move when data replaces the loading skeleton |
 
 Test names cite acceptance criteria (`AC-4.4: …`). Several tests were checked by breaking the code

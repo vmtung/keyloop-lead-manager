@@ -32,9 +32,9 @@ made slow or unreliable on purpose.
 |---|---|
 | [System design](docs/design.md) | Architecture, data flow, technology choices, observability, scale, and how GenAI helped with the design |
 | [Assumptions](specs/assumptions.md) | Where the brief was open, what was decided and why |
-| [Acceptance criteria](specs/acceptance-criteria.md) | 51 criteria; tests cite them by ID |
+| [Acceptance criteria](specs/acceptance-criteria.md) | 53 criteria; tests cite them by ID |
 | [API contract](specs/api-contract.md) | Endpoints, events and fault injection; schemas in [`src/contract.ts`](src/contract.ts) |
-| [Decision records](docs/adr/) | Stack, server-sent events, mock backend, optimistic logging, claiming |
+| [Decision records](docs/adr/) | Stack, server-sent events, mock backend, optimistic logging, claiming, paging the inbox |
 | [AI collaboration log](AI_LOG.md) | Each step with the AI: what I asked, what it produced, what I decided |
 
 ## Run it
@@ -53,7 +53,7 @@ The app is at http://localhost:5173, and the mock API on port 8787. Both start t
 
 In development, the cog in the bottom-right corner opens **Demo tools**: simulate a new website
 lead, have a teammate call or claim the next lead, drop the live connection, switch the API between
-normal, slow and flaky, or reset the sample data. Production builds leave it out. The same things
+normal, slow and flaky, load 5,000 leads, or reset the sample data. Production builds leave it out. The same things
 work from the command line:
 
 ```bash
@@ -89,7 +89,7 @@ Stop Jaeger with `pnpm traces:down`.
 pnpm test
 ```
 
-184 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
+206 tests: unit tests for the speed-to-lead rules and the API boundary, server tests for every
 endpoint, and integration tests that run the whole app against the real mock server in-process.
 
 ```bash
@@ -183,5 +183,5 @@ The AI made mistakes I had to catch, and they are in the log as they happened:
 
 Strict TypeScript with branded IDs; every API response and event parsed against the contract at
 one boundary; business rules as pure functions shared by the app and the mock server; lint, types,
-184 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
+206 tests, the build and the end-to-end test on every push. axe-core reports no violations on any
 view, and the production build loads its largest element in under 0.7 seconds.

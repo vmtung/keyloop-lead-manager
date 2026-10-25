@@ -1,48 +1,53 @@
 import { CircleAlert } from 'lucide-react'
+import { type ReactNode, useEffect, useRef } from 'react'
 import { Link } from 'react-router'
 import { describeFailure } from '../api/describeFailure.ts'
 import { useCurrentUser, useNow } from '../app/context.tsx'
 import type { Lead, LeadId, UserId } from '../contract.ts'
 import { formatWhen } from '../domain/format.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
-import { SLA, sortForInbox, speedToLead } from '../domain/speedToLead.ts'
+import { SLA, speedToLead } from '../domain/speedToLead.ts'
 import { Avatar } from './Avatar.tsx'
 import { InboxFigures } from './InboxFigures.tsx'
 import { useLive } from './live.tsx'
-import { useLeads, useUnsavedLeadIds } from './queries.ts'
+import { useAwaitingLeads, useContactedLeads, useResponseStats, useUnsavedLeadIds } from './queries.ts'
 import { SpeedToLeadPill } from './SpeedToLeadStatus.tsx'
 
 /** The page's h1 belongs to the main view: "Leads" here, the customer's name when a lead is open. */
 export function LeadInbox({ selectedId }: { selectedId: LeadId | undefined }) {
-  const leads = useLeads()
+  const awaiting = useAwaitingLeads()
+  const contacted = useContactedLeads()
+  const stats = useResponseStats()
   const now = useNow()
   const Title = selectedId ? 'h2' : 'h1'
+  const total = contacted.data?.pages[0]?.total
+  // The first page's error; a later page's failure shows at the end of the list instead.
+  const failed = awaiting.isError ? awaiting.error : contacted.isError && !contacted.data ? contacted.error : null
 
   return (
     <section className="inbox" aria-labelledby="inbox-title">
       <header className="inbox__header">
         <Title id="inbox-title" className="inbox__title">Leads</Title>
         {/* Always rendered, so its space is reserved while loading and the list doesn't jump (AC-1.3). */}
-        <InboxFigures leads={leads.data} now={now} />
+        <InboxFigures awaiting={awaiting.data} stats={stats.data} now={now} />
       </header>
 
-      {leads.isPending && <InboxSkeleton />}
-
-      {leads.isError && (
+      {failed !== null ? (
         <div className="block-error" role="alert">
-          <p>Couldn’t load leads. {describeFailure(leads.error)}</p>
-          <button type="button" className="button button--text" onClick={() => void leads.refetch()}>
+          <p>Couldn’t load leads. {describeFailure(failed)}</p>
+          <button type="button" className="button button--text"
+            onClick={() => void Promise.all([awaiting.refetch(), contacted.refetch()])}>
             Retry
           </button>
         </div>
-      )}
-
-      {leads.data?.length === 0 && (
+      ) : !awaiting.data || total === undefined ? (
+        <InboxSkeleton />
+      ) : awaiting.data.length === 0 && total === 0 ? (
         <p className="empty">No leads yet. New website enquiries will appear here as they arrive.</p>
-      )}
-
-      {leads.data && leads.data.length > 0 && (
-        <LeadGroups leads={sortForInbox(leads.data)} selectedId={selectedId} now={now} />
+      ) : (
+        <LeadGroups awaiting={awaiting.data} contacted={contacted.data?.pages.flatMap((p) => p.leads) ?? []}
+          contactedTotal={total} selectedId={selectedId} now={now}
+          more={<LoadMore query={contacted} />} />
       )}
     </section>
   )
@@ -57,7 +62,15 @@ interface RowState {
   userId: UserId | undefined
 }
 
-function LeadGroups({ leads, selectedId, now }: { leads: Lead[]; selectedId: LeadId | undefined; now: number }) {
+function LeadGroups(props: {
+  awaiting: Lead[]
+  contacted: Lead[]
+  contactedTotal: number
+  selectedId: LeadId | undefined
+  now: number
+  more: ReactNode
+}) {
+  const { selectedId, now } = props
   const state: RowState = {
     selectedId,
     now,
@@ -65,24 +78,22 @@ function LeadGroups({ leads, selectedId, now }: { leads: Lead[]; selectedId: Lea
     unsaved: useUnsavedLeadIds(),
     userId: useCurrentUser().user?.id,
   }
-  const awaiting = leads.filter((l) => l.firstResponseAt === null)
-  const contacted = leads.filter((l) => l.firstResponseAt !== null)
   return (
     <div className="inbox__groups" data-lead-list>
-      <LeadGroup title="Awaiting response" leads={awaiting} state={state}
+      <LeadGroup title="Awaiting response" leads={props.awaiting} total={props.awaiting.length} state={state}
         empty="Everyone has had a response." />
-      <LeadGroup title="Contacted" leads={contacted} state={state}
-        empty="No contacted leads yet." />
+      <LeadGroup title="Contacted" leads={props.contacted} total={props.contactedTotal} state={state}
+        empty="No contacted leads yet." more={props.more} />
     </div>
   )
 }
 
-function LeadGroup(props: { title: string; leads: Lead[]; state: RowState; empty: string }) {
+function LeadGroup(props: { title: string; leads: Lead[]; total: number; state: RowState; empty: string; more?: ReactNode }) {
   const id = `group-${props.title.toLowerCase().replace(/\s+/g, '-')}`
   return (
     <section aria-labelledby={id} className="inbox__group">
       <h2 id={id} className="inbox__group-title">
-        {props.title} <span className="count num">{props.leads.length}</span>
+        {props.title} <span className="count num">{props.total.toLocaleString('en-GB')}</span>
       </h2>
       {props.leads.length === 0 ? (
         <p className="empty empty--inline">{props.empty}</p>
@@ -102,7 +113,67 @@ function LeadGroup(props: { title: string; leads: Lead[]; state: RowState; empty
           ))}
         </ul>
       )}
+      {props.more}
     </section>
+  )
+}
+
+/**
+ * The end of the contacted list (AC-1.8). Scrolling near it loads the next page; by keyboard it is
+ * a button (`j` reaches it), and after loading, focus moves to the first new lead.
+ */
+function LoadMore({ query }: { query: ReturnType<typeof useContactedLeads> }) {
+  const button = useRef<HTMLButtonElement>(null)
+  // The row to focus once a page loaded by hand has rendered.
+  const focusRow = useRef<number | null>(null)
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = query
+  const pages = query.data?.pages.length
+
+  useEffect(() => {
+    if (isFetchNextPageError) focusRow.current = null
+  }, [isFetchNextPageError])
+
+  useEffect(() => {
+    if (focusRow.current === null) return
+    const rows = document.getElementById('group-contacted')?.closest('section')?.querySelectorAll<HTMLElement>('[data-lead-link]')
+    rows?.[focusRow.current]?.focus()
+    focusRow.current = null
+  }, [pages])
+
+  useEffect(() => {
+    const el = button.current
+    // jsdom has no IntersectionObserver; there the button is the way in.
+    if (!el || !hasNextPage || isFetchingNextPage || isFetchNextPageError) return
+    if (typeof IntersectionObserver === 'undefined') return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) void fetchNextPage()
+      },
+      // The inbox pane scrolls, not the page; start loading well before the end is in view.
+      { root: el.closest('.inbox'), rootMargin: '0px 0px 600px 0px' },
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+    // Re-observed after each page, so a button still in view keeps loading.
+  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage])
+
+  if (!hasNextPage) return null
+
+  function loadByHand() {
+    focusRow.current = button.current?.closest('section')?.querySelectorAll('[data-lead-link]').length ?? null
+    void fetchNextPage()
+  }
+
+  return (
+    <div className="load-more">
+      {isFetchNextPageError && (
+        <p className="load-more__error" role="alert">Couldn’t load more leads. {describeFailure(query.error)}</p>
+      )}
+      <button ref={button} type="button" className="button button--secondary load-more__button" data-load-more
+        aria-disabled={isFetchingNextPage} onClick={() => isFetchingNextPage || loadByHand()}>
+        {isFetchingNextPage ? 'Loading more…' : isFetchNextPageError ? 'Retry' : 'Load more'}
+      </button>
+    </div>
   )
 }
 

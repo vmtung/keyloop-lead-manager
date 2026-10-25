@@ -19,7 +19,9 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 | Method and path | Request | Success | Errors |
 |---|---|---|---|
 | `GET /users` | | 200 `UserListResponse` | |
-| `GET /leads` | | 200 `LeadListResponse`, all leads, unsorted (the client sorts, AC-1.2) | |
+| `GET /leads?group=awaiting` | | 200 `LeadListResponse`: every lead awaiting response, longest-waiting first | 400 `validation_failed` |
+| `GET /leads?group=contacted&cursor=…&limit=…` | | 200 `LeadPageResponse`: contacted leads newest first, `limit` (1–100, default 50) at a time from `cursor` | 400 `validation_failed` (missing group, bad cursor or limit) |
+| `GET /stats` | | 200 `ResponseStats`: leads first answered in the last 24 hours, the share within the target, and the median first response (AC-1.6) | |
 | `GET /leads/:leadId` | | 200 `LeadDetailResponse`, activities oldest first, plus `suggestion` (A19) | 404 `not_found` |
 | `POST /leads/:leadId/activities` | `NewActivity` | 201 `CreateActivityResponse` (new) or 200 (same ID replayed) | 400 `validation_failed`, 401 `unauthenticated`, 404 `not_found`, 409 `idempotency_conflict` |
 | `POST /leads` | `NewLead` | 201 `CreateLeadResponse` | 400 `validation_failed` |
@@ -31,6 +33,15 @@ Base path: `/api`. JSON in and out, timestamps in UTC ISO 8601.
 
 Every error body is an `ApiErrorResponse`: `{ "error": { "code": "...", "message": "..." } }`.
 Any endpoint can also return 500 `internal`, or be slow, when fault injection is on.
+
+### Paging the inbox
+
+Leads awaiting response are few and urgent, so they come in one response. Contacted leads grow
+without limit, so they come a page at a time (ADR-006). `nextCursor` is opaque to the client: pass it
+back as `cursor` for the next page; `null` means the last page. The cursor names the last lead
+returned (its `receivedAt` and `id`) rather than an offset, so a lead added while someone scrolls
+doesn't shift the pages and show a row twice. `total` is every contacted lead, for the group
+heading.
 
 ### Logging an activity
 
@@ -89,6 +100,7 @@ fault injection, so a flaky API can always be switched back to normal.
 | `POST /dev/leads` | | 201 `CreateLeadResponse`: a sample website enquiry, announced as `lead.created` |
 | `POST /dev/reset` | | 200 `LeadListResponse`: the sample data again, with fresh timers |
 | `POST /dev/drop-streams` | | 200 `DropStreamsResponse`: closes every live event stream, so clients reconnect |
+| `POST /dev/scale` | | 200 `DevScaleResponse`: the sample data plus 5,000 contacted leads over the last 30 days, and how many leads there are now. Reset puts the sample data back |
 | `GET /dev/tracing` | | 200 `DevTracing`: whether the server is sending traces to Jaeger |
 | `PUT /dev/tracing` | `DevTracing` | 200 `DevTracing`; 400 `validation_failed`; 503 `internal` when switching on and Jaeger can't be reached |
 

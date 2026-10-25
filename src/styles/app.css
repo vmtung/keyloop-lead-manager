@@ -367,6 +367,14 @@ kbd {
   border-radius: 4px; background: var(--surface); color: var(--text); font: 500 12px/18px var(--font); text-align: center;
 }
 
+/* The end of the contacted list (AC-1.8). Rows off screen skip layout and paint, so thousands of
+   loaded rows stay cheap without a virtualised list (ADR-006). */
+.lead-list > li { content-visibility: auto; contain-intrinsic-size: auto 64px; }
+.load-more { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; }
+.load-more__button { align-self: stretch; }
+.load-more__button[aria-disabled='true'] { color: var(--muted); cursor: progress; }
+.load-more__error { color: var(--negative); font-size: var(--fs-small); }
+
 /* Demo tools (development builds only). Floats over the page by design: a dev tool, not product UI. */
 .demo { position: fixed; right: 16px; bottom: 16px; z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .demo__toggle {

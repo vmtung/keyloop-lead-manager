@@ -1,14 +1,14 @@
 // Demo tools: trigger the mock's simulations from the app instead of the command line. Development
 // builds only (main.tsx loads it behind import.meta.env.DEV), so production never ships it.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, Hand, Phone, RotateCcw, Settings, Unplug, UserPlus } from 'lucide-react'
+import { Database, ExternalLink, Hand, Phone, RotateCcw, Settings, Unplug, UserPlus } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { ApiError } from '../api/client.ts'
 import { describeFailure } from '../api/describeFailure.ts'
 import { useAnnounce, useApi, useCurrentUser, useNow } from '../app/context.tsx'
 import type { ActivityId, DevFaults } from '../contract.ts'
 import { nextUp } from '../domain/inbox.ts'
-import { leadKeys, useLeads } from '../leads/queries.ts'
+import { leadKeys, useAwaitingLeads } from '../leads/queries.ts'
 import { syncBrowserTracing } from './browserTracing.ts'
 
 const JAEGER = 'http://localhost:16686/search?service=lead-manager-web'
@@ -32,7 +32,7 @@ export default function DemoTools() {
   const announce = useAnnounce()
   const now = useNow()
   const { user, users } = useCurrentUser()
-  const leads = useLeads()
+  const leads = useAwaitingLeads()
   const faults = useQuery({ queryKey: ['dev', 'faults'], queryFn: () => api.dev.getFaults() })
   // The server holds the switch, so it survives a reload; the browser follows it (AC-7.7).
   const tracing = useQuery({ queryKey: ['dev', 'tracing'], queryFn: () => api.dev.getTracing() })
@@ -167,10 +167,19 @@ export default function DemoTools() {
           <button type="button" className="demo__action" disabled={busy !== null}
             onClick={() => run('Reset', async () => {
               await api.dev.reset()
-              await queryClient.invalidateQueries({ queryKey: leadKeys.all })
+              // Reset, not invalidate: the contacted list starts again from its first page.
+              await queryClient.resetQueries({ queryKey: leadKeys.all })
               return 'Sample data reset, with fresh timers.'
             })}>
             <RotateCcw aria-hidden size={16} /> Reset sample data
+          </button>
+          <button type="button" className="demo__action" disabled={busy !== null}
+            onClick={() => run('Load 5,000 leads', async () => {
+              const { total } = await api.dev.scale()
+              await queryClient.resetQueries({ queryKey: leadKeys.all })
+              return `${total.toLocaleString('en-GB')} leads loaded. Scroll the contacted list to page through them.`
+            })}>
+            <Database aria-hidden size={16} /> Load 5,000 leads
           </button>
 
           {result && <p className="demo__result" role="status">{result}</p>}

@@ -1,16 +1,17 @@
-import type { Lead } from '../contract.ts'
+import type { Lead, ResponseStats } from '../contract.ts'
 import { formatDuration } from '../domain/format.ts'
-import { inboxStats } from '../domain/inbox.ts'
+import { waitingStats } from '../domain/inbox.ts'
 import { SLA } from '../domain/speedToLead.ts'
 
 const TARGET = formatDuration(SLA.targetMs)
 
 /**
- * The screen's headline (AC-1.6): who is waiting, and how fast the team has answered over the last
- * day. Rendered while loading too, with bars in place of values, so nothing moves when data lands.
+ * The screen's headline (AC-1.6): who is waiting, from the awaiting leads held here so it ticks, and
+ * how fast the team answered over the last day, from the server over every lead (ADR-006).
+ * Rendered while loading too, with bars in place of values, so nothing moves when data lands.
  */
-export function InboxFigures({ leads, now }: { leads: Lead[] | undefined; now: number }) {
-  const stats = leads && inboxStats(leads, now)
+export function InboxFigures(props: { awaiting: Lead[] | undefined; stats: ResponseStats | undefined; now: number }) {
+  const stats = props.awaiting && props.stats && { ...waitingStats(props.awaiting, props.now), ...props.stats }
   return (
     <dl className="figures" aria-busy={stats ? undefined : true}>
       <div className="figure">

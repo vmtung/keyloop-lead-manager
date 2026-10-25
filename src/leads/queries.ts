@@ -1,27 +1,61 @@
 // Server state for leads. Optimistic logging follows ADR-004: the pending activity is rendered from
 // the mutation's own variables, so a failure needs no cache rollback, only the entry disappearing.
-import { type Mutation, useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  type Mutation,
+  useInfiniteQuery,
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import type { z } from 'zod'
 import { describeFailure } from '../api/describeFailure.ts'
+import { log } from '../observability/log.ts'
 import { withSpan } from '../observability/trace.ts'
 import { useAnnounce, useApi } from '../app/context.tsx'
 import { ApiError } from '../api/client.ts'
+import type { Api } from '../api/client.ts'
 import type { Lead, LeadDetailResponse, LeadId, LeadListResponse, NewActivity, User } from '../contract.ts'
+import { type ContactedPages, placeInAwaiting, placeInContacted } from './placeLead.ts'
 
 export const leadKeys = {
   all: ['leads'] as const,
-  list: () => ['leads', 'list'] as const,
+  awaiting: () => ['leads', 'awaiting'] as const,
+  contacted: () => ['leads', 'contacted'] as const,
+  stats: () => ['leads', 'stats'] as const,
   detail: (id: LeadId) => ['leads', 'detail', id] as const,
 }
 
 const logActivityKey = (leadId: LeadId) => ['logActivity', leadId] as const
 
-export function useLeads() {
+/** Every lead awaiting response: few and urgent, so loaded in full (ADR-006). */
+export function useAwaitingLeads() {
   const api = useApi()
   return useQuery({
-    queryKey: leadKeys.list(),
-    queryFn: ({ signal }) => api.listLeads(signal),
+    queryKey: leadKeys.awaiting(),
+    queryFn: ({ signal }) => api.listAwaiting(signal),
     select: (data) => data.leads,
+  })
+}
+
+/** Contacted leads, newest first, 50 at a time (AC-1.8). */
+export function useContactedLeads() {
+  const api = useApi()
+  return useInfiniteQuery({
+    queryKey: leadKeys.contacted(),
+    queryFn: ({ pageParam, signal }) => api.listContacted(pageParam, signal),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
+  })
+}
+
+/** The 24-hour figures, from the server over every lead (AC-1.6). The window slides, so refresh. */
+export function useResponseStats() {
+  const api = useApi()
+  return useQuery({
+    queryKey: leadKeys.stats(),
+    queryFn: ({ signal }) => api.getStats(signal),
+    refetchInterval: 60_000,
   })
 }
 
@@ -78,17 +112,38 @@ export function useLogActivity(leadId: LeadId) {
         },
       )
       void queryClient.invalidateQueries({ queryKey: leadKeys.detail(leadId) })
-      setListLead(queryClient, lead)
+      placeLead(queryClient, lead)
     },
   })
 }
 
 type QueryClient = ReturnType<typeof useQueryClient>
 
-function setListLead(queryClient: QueryClient, lead: Lead) {
-  queryClient.setQueryData<z.output<typeof LeadListResponse>>(leadKeys.list(), (old) =>
-    old && { leads: old.leads.map((l) => (l.id === lead.id ? lead : l)) },
+/** Puts a changed lead where it now belongs in the inbox, without refetching pages (AC-5.4). */
+export function placeLead(queryClient: QueryClient, lead: Lead) {
+  const awaiting = queryClient.getQueryData<z.output<typeof LeadListResponse>>(leadKeys.awaiting())
+  const joined = lead.firstResponseAt !== null && (awaiting?.leads.some((l) => l.id === lead.id) ?? false)
+  queryClient.setQueryData<z.output<typeof LeadListResponse>>(leadKeys.awaiting(), (old) =>
+    old && { leads: placeInAwaiting(old.leads, lead) },
   )
+  queryClient.setQueryData<ContactedPages>(leadKeys.contacted(), (old) => old && placeInContacted(old, lead, joined))
+  void queryClient.invalidateQueries({ queryKey: leadKeys.stats() })
+}
+
+/**
+ * Fetches one lead (a live event named it, or a claim lost a race) and places it. A failed fetch
+ * leaves the row as it was: the API client has logged it, and an open lead shows its own error.
+ */
+export async function refreshLead(queryClient: QueryClient, api: Api, id: LeadId) {
+  try {
+    const detail = await queryClient.fetchQuery({
+      queryKey: leadKeys.detail(id),
+      queryFn: ({ signal }) => api.getLead(id, signal),
+    })
+    placeLead(queryClient, detail.lead)
+  } catch (error) {
+    log.warn('lead.refresh_failed', { leadId: id, error: String(error) })
+  }
 }
 
 export interface ClaimInput {
@@ -107,14 +162,11 @@ export function useClaim(leadId: LeadId) {
       queryClient.setQueryData<z.output<typeof LeadDetailResponse>>(leadKeys.detail(leadId), (old) =>
         old && { ...old, lead },
       )
-      setListLead(queryClient, lead)
+      placeLead(queryClient, lead)
     },
     onError: async (error) => {
       if (error instanceof ApiError && error.failure.kind === 'http' && error.failure.status === 409) {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: leadKeys.detail(leadId) }),
-          queryClient.invalidateQueries({ queryKey: leadKeys.list() }),
-        ])
+        await refreshLead(queryClient, api, leadId)
       }
     },
   })

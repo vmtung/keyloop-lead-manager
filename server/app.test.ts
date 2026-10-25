@@ -8,17 +8,22 @@ import {
   CreateActivityResponse,
   CreateLeadResponse,
   DevFaults,
+  DevScaleResponse,
   DevTracing,
   DropStreamsResponse,
   LeadResponse,
   LeadDetailResponse,
   LeadListResponse,
+  LeadPageResponse,
+  ResponseStats,
   ServerEvent,
 } from '../src/contract.ts'
 import { createApp, type Faults } from './app.ts'
 import { parseFaults } from './config.ts'
 import { seed } from './seed.ts'
 import { openStore } from './store.ts'
+import { newestFirst } from '../src/domain/speedToLead.ts'
+import { responseStats } from '../src/domain/inbox.ts'
 import { TracingUnavailable, type TracingSwitch } from './tracing.ts'
 
 const NOW = new Date('2026-10-22T09:00:00.000Z')
@@ -72,15 +77,65 @@ function postActivity(
 }
 
 describe('reading leads', () => {
-  test('GET /api/leads matches the contract', async () => {
-    const { app } = await setup()
-    const res = await app.request('/api/leads')
+  const contactedPage = async (app: Awaited<ReturnType<typeof setup>>['app'], query: string) => {
+    const res = await app.request(`/api/leads?group=contacted&${query}`)
     expect(res.status).toBe(200)
+    return LeadPageResponse.parse(await res.json())
+  }
+
+  test('AC-1.8: GET /api/leads?group=awaiting returns every waiting lead, longest-waiting first', async () => {
+    const { app } = await setup()
+    const res = await app.request('/api/leads?group=awaiting')
     const { leads } = LeadListResponse.parse(await res.json())
-    expect(leads.map((l) => l.customer.name).sort()).toEqual(
-      seed(NOW).leads.map((l) => l.customer.name).sort(),
-    )
-    expect(new Set(leads.map((l) => l.id)).size).toBe(leads.length) // no duplicates
+    expect(leads.map((l) => l.customer.name)).toEqual(['Hannah Okafor', 'Marcus Reid', 'Olivia Bennett'])
+    expect(leads.every((l) => l.firstResponseAt === null)).toBe(true)
+  })
+
+  test('AC-1.8: contacted leads come a page at a time, newest first, every lead exactly once', async () => {
+    const { app } = await setup()
+    const expected = seed(NOW).leads.filter((l) => l.firstResponseAt !== null).sort(newestFirst).map((l) => l.id)
+    const seen: string[] = []
+    let cursor: string | null = null
+    let pages = 0
+    do {
+      const page: LeadPageResponse = await contactedPage(app, `limit=2${cursor ? `&cursor=${cursor}` : ''}`)
+      expect(page.total).toBe(expected.length)
+      expect(page.leads.length).toBeLessThanOrEqual(2)
+      seen.push(...page.leads.map((l) => l.id))
+      cursor = page.nextCursor
+      pages += 1
+    } while (cursor)
+    expect(seen).toEqual(expected)
+    expect(pages).toBe(Math.ceil(expected.length / 2))
+  })
+
+  test('AC-1.8: a lead contacted while someone pages through does not shift the pages', async () => {
+    const { app } = await setup()
+    const first = await contactedPage(app, 'limit=2')
+    // Olivia is the newest lead, so once contacted she sorts above everything already paged.
+    expect((await postActivity(app, { id: crypto.randomUUID(), type: 'call', summary: 'Called' })).status).toBe(201)
+    const second = await contactedPage(app, `limit=2&cursor=${first.nextCursor}`)
+    expect(second.total).toBe(first.total + 1)
+    const ids = [...first.leads, ...second.leads].map((l) => l.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).not.toContain(AWAITING_LEAD)
+  })
+
+  test.each(['', 'group=everything', 'group=contacted&limit=0', 'group=contacted&limit=101', 'group=contacted&cursor=not-a-cursor'])(
+    'AC-1.8: GET /api/leads?%s is a 400',
+    async (query) => {
+      const { app } = await setup()
+      const res = await app.request(`/api/leads?${query}`)
+      expect(res.status).toBe(400)
+      expect(ApiErrorResponse.parse(await res.json()).error.code).toBe('validation_failed')
+    },
+  )
+
+  test('AC-1.6: GET /api/stats gives the 24-hour figures over every lead', async () => {
+    const { app } = await setup()
+    const stats = ResponseStats.parse(await (await app.request('/api/stats')).json())
+    expect(stats).toEqual(responseStats(seed(NOW).leads, NOW.getTime()))
+    expect(stats.answered).toBeGreaterThan(0)
   })
 
   test('GET /api/leads/:id returns activities oldest first', async () => {
@@ -197,7 +252,7 @@ describe('logging an activity', () => {
 describe('request IDs and logging (AC-7.3)', () => {
   test('echoes the client request ID and logs it', async () => {
     const { app } = await setup()
-    const res = await app.request('/api/leads', { headers: { 'x-request-id': 'req-123' } })
+    const res = await app.request('/api/leads?group=awaiting', { headers: { 'x-request-id': 'req-123' } })
     expect(res.headers.get('x-request-id')).toBe('req-123')
     expect(logs).toContainEqual(expect.objectContaining({ requestId: 'req-123', status: 200 }))
   })
@@ -206,13 +261,13 @@ describe('request IDs and logging (AC-7.3)', () => {
 describe('fault injection', () => {
   test('a failure rate of 1 fails data endpoints but not health', async () => {
     const { app } = await setup({ ...NO_FAULTS, failureRate: 1 })
-    expect((await app.request('/api/leads')).status).toBe(500)
+    expect((await app.request('/api/leads?group=awaiting')).status).toBe(500)
     expect((await app.request('/api/health')).status).toBe(200)
   })
 
   test('failures are random per request', async () => {
     const { app } = await setup({ ...NO_FAULTS, failureRate: 0.3 }, () => 0.31)
-    expect((await app.request('/api/leads')).status).toBe(200)
+    expect((await app.request('/api/leads?group=awaiting')).status).toBe(200)
   })
 
   test.each([
@@ -429,14 +484,14 @@ describe('dev endpoints (demo tools)', () => {
     const flaky = { latencyMs: { min: 0, max: 0 }, failureRate: 1 }
     const res = await app.request('/api/dev/faults', json('PUT', flaky))
     expect(DevFaults.parse(await res.json())).toEqual(flaky)
-    expect((await app.request('/api/leads')).status).toBe(500)
+    expect((await app.request('/api/leads?group=awaiting')).status).toBe(500)
   })
 
   test('dev endpoints ignore fault injection, so a flaky API can be switched back', async () => {
     const { app } = await setup({ ...NO_FAULTS, failureRate: 1 })
     const res = await app.request('/api/dev/faults', json('PUT', NO_FAULTS))
     expect(res.status).toBe(200)
-    expect((await app.request('/api/leads')).status).toBe(200)
+    expect((await app.request('/api/leads?group=awaiting')).status).toBe(200)
   })
 
   test.each([
@@ -511,5 +566,22 @@ describe('dev endpoints (demo tools)', () => {
   test('rejects an invalid tracing switch', async () => {
     const { app } = await setup()
     expect((await app.request('/api/dev/tracing', json('PUT', { enabled: 'yes' }))).status).toBe(400)
+  })
+
+  test('AC-1.8: scale loads 5,000 contacted leads beside the sample data, and reset takes them away', async () => {
+    const { app, store } = await setup()
+    const res = await app.request('/api/dev/scale', json('POST'))
+    const { total } = DevScaleResponse.parse(await res.json())
+    expect(total).toBe(seed(NOW).leads.length + 5000)
+    expect(store.read().leads).toHaveLength(total)
+
+    const page = LeadPageResponse.parse(await (await app.request('/api/leads?group=contacted')).json())
+    expect(page.leads).toHaveLength(50)
+    expect(page.total).toBe(total - 3) // the three sample leads still waiting
+    const awaiting = LeadListResponse.parse(await (await app.request('/api/leads?group=awaiting')).json())
+    expect(awaiting.leads).toHaveLength(3)
+
+    await app.request('/api/dev/reset', json('POST'))
+    expect(store.read().leads).toHaveLength(seed(NOW).leads.length)
   })
 })

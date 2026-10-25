@@ -33,7 +33,8 @@ export function useShortcuts() {
 }
 
 function moveFocus(step: 1 | -1) {
-  const links = [...document.querySelectorAll<HTMLElement>('[data-lead-link]')]
+  // Load more is the last stop, so j reaches the next page by keyboard (AC-1.8).
+  const links = [...document.querySelectorAll<HTMLElement>('[data-lead-link], [data-load-more]')]
   if (links.length === 0) return
   const focused = links.indexOf(document.activeElement as HTMLElement)
   const selected = links.findIndex((l) => l.getAttribute('aria-current') === 'page')

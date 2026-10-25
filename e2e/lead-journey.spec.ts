@@ -45,7 +45,7 @@ test('a website lead arrives live, is followed up, and the follow-up survives a 
 
 test('AC-1.3: the list does not jump when the leads replace the loading skeleton', async ({ page }) => {
   // Hold the lead list back so the skeleton is really on screen before the data lands.
-  await page.route('**/api/leads', async (route) => {
+  await page.route('**/api/leads?*', async (route) => {
     await new Promise((r) => setTimeout(r, 800))
     await route.continue()
   })

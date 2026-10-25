@@ -11,20 +11,28 @@ import {
   CreateActivityResponse,
   CreateLeadResponse,
   DevFaults,
+  DevScaleResponse,
   DevTracing,
   DropStreamsResponse,
   type IsoDateTime,
   LeadDetailResponse,
   LeadId,
+  LeadListQuery,
   LeadListResponse,
+  LeadPageResponse,
   LeadResponse,
   NewActivity,
   NewLead,
+  ResponseStats,
   type ServerEvent,
   UserId,
   UserListResponse,
 } from '../src/contract.ts'
+import { responseStats } from '../src/domain/inbox.ts'
+import { newestFirst } from '../src/domain/speedToLead.ts'
 import { suggestNextAction } from '../src/domain/suggest.ts'
+import { decodeCursor, pageContacted } from './paging.ts'
+import { scale } from './scale.ts'
 import { LEAD_SAMPLES } from './samples.ts'
 import { seed } from './seed.ts'
 import { appendActivity, claimLead, createLead, releaseLead, type Store } from './store.ts'
@@ -216,6 +224,14 @@ export function createApp(deps: AppDeps) {
     return c.json(send(LeadListResponse, { leads: data.leads }))
   })
 
+  app.post('/dev/scale', async (c) => {
+    const data = await update(() => {
+      const scaled = scale(seed(now()), now())
+      return { data: scaled, value: scaled }
+    })
+    return c.json(send(DevScaleResponse, { total: data.leads.length }))
+  })
+
   app.post('/dev/drop-streams', (c) => {
     const open = [...streams]
     for (const stream of open) {
@@ -244,8 +260,24 @@ export function createApp(deps: AppDeps) {
     c.json(send(UserListResponse, { users: deps.store.read().users })),
   )
 
-  app.get('/leads', (c) =>
-    c.json(send(LeadListResponse, { leads: deps.store.read().leads })),
+  // Awaiting in full, contacted a page at a time (ADR-006).
+  app.get('/leads', (c) => {
+    const query = LeadListQuery.safeParse(c.req.query())
+    if (!query.success) return c.json(error('validation_failed', query.error.message), 400)
+    const { leads } = deps.store.read()
+    if (query.data.group === 'awaiting') {
+      const awaiting = leads.filter((l) => l.firstResponseAt === null).sort((a, b) => newestFirst(b, a))
+      return c.json(send(LeadListResponse, { leads: awaiting }))
+    }
+    const after = query.data.cursor === undefined ? null : decodeCursor(query.data.cursor)
+    if (after === null && query.data.cursor !== undefined) {
+      return c.json(error('validation_failed', 'cursor is not one this server returned'), 400)
+    }
+    return c.json(send(LeadPageResponse, pageContacted(leads, after, query.data.limit)))
+  })
+
+  app.get('/stats', (c) =>
+    c.json(send(ResponseStats, responseStats(deps.store.read().leads, now().getTime()))),
   )
 
   app.get('/leads/:leadId', (c) => {

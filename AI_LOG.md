@@ -323,3 +323,24 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   failed; with the code restored it passed five runs in a row, in under five seconds.
 - **Also found:** the design doc's test table still had the counts from before the tracing switch.
   Corrected.
+
+## 17. Scale: 5,000 leads and lazy loading
+
+- **Ask:** Show the inbox at a dealership's real size, with the list loading lazily.
+- **AI output:** it flagged first that paging breaks more than the list: the figures, Next up and
+  the row clocks all worked on the full list in the browser. Proposed, and I approved: waiting
+  leads load in full (few and urgent), contacted leads 50 at a time with a keyset cursor, the
+  24-hour figures move to a server endpoint built on the same domain function, and live events
+  patch one row instead of refetching every page. ADR-006 records it. For rendering it proposed
+  `content-visibility: auto` over a virtualised list, to avoid a dependency, and to measure first.
+- **Spec and tests first:** AC-1.8 and AC-5.4, the paged endpoints, and tests for the cursor
+  (including a lead contacted mid-scroll), the placement rules, Load more by mouse and by `j`, a
+  failed page, a live update that must not refetch pages, and a reconnect.
+- **Caught by the tests:** focus after Load more went nowhere, because it was moved before React had
+  rendered the new rows. It now moves after the render.
+- **Verified by breaking the code three ways:** refetching pages instead of placing the lead,
+  keeping all pages after a reconnect, and `j` skipping Load more. Each failed its test.
+- **Measured in the browser,** with all 5,005 contacted leads loaded by scrolling: 43,000 DOM nodes,
+  142 MB heap, layout after a jump 16 ms with `content-visibility` and 22 ms without. The first
+  load went from one 2.4 MB response to 25 KB. Server side, a page takes about 25 ms and a save
+  14 ms with the 5.1 MB data file. Recorded in the design doc, with virtualisation as the next step.

@@ -58,6 +58,14 @@ export function speedToLead(lead: Lead, now: number): SpeedToLead {
 export function sortForInbox(leads: readonly Lead[]): Lead[] {
   const awaiting = leads.filter((l) => l.firstResponseAt === null)
   const contacted = leads.filter((l) => l.firstResponseAt !== null)
-  const byReceived = (a: Lead, b: Lead) => Date.parse(a.receivedAt) - Date.parse(b.receivedAt)
-  return [...awaiting.sort(byReceived), ...contacted.sort((a, b) => byReceived(b, a))]
+  return [...awaiting.sort((a, b) => newestFirst(b, a)), ...contacted.sort(newestFirst)]
+}
+
+/**
+ * Newest received first, ties broken by ID, so the order is total. The contacted pages' cursor is
+ * this key (ADR-006): without the tie-break, two leads received in the same millisecond could be
+ * split across pages and one skipped.
+ */
+export function newestFirst(a: Pick<Lead, 'receivedAt' | 'id'>, b: Pick<Lead, 'receivedAt' | 'id'>): number {
+  return Date.parse(b.receivedAt) - Date.parse(a.receivedAt) || (b.id < a.id ? -1 : b.id > a.id ? 1 : 0)
 }

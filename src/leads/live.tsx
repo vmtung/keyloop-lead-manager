@@ -1,13 +1,15 @@
-// Live updates (ADR-002): events carry IDs only, so each one invalidates the queries it affects and
-// TanStack Query refetches them. The REST API stays the only way data reaches the cache.
+// Live updates (ADR-002): events carry IDs only, so the client fetches what changed from the REST API,
+// which stays the only way data reaches the cache. A changed lead is placed in the inbox rather than
+// refetching every loaded page (ADR-006).
 import { useQueryClient } from '@tanstack/react-query'
 import { createContext, type ReactNode, use, useEffect, useRef, useState } from 'react'
 import type { z } from 'zod'
 import { type EventSourceLike, type LiveStatus, subscribeToEvents } from '../api/events.ts'
-import { useAnnounce } from '../app/context.tsx'
+import { useAnnounce, useApi } from '../app/context.tsx'
 import type { LeadDetailResponse, LeadId, LeadListResponse, ServerEvent } from '../contract.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
-import { leadKeys } from './queries.ts'
+import type { ContactedPages } from './placeLead.ts'
+import { leadKeys, refreshLead } from './queries.ts'
 
 const FRESH_MS = 8_000
 
@@ -32,6 +34,7 @@ export function LiveUpdatesProvider({
   children: ReactNode
 }) {
   const queryClient = useQueryClient()
+  const api = useApi()
   const announce = useAnnounce()
   const [status, setStatus] = useState<LiveStatus>('connecting')
   const [fresh, setFresh] = useState<ReadonlySet<LeadId>>(new Set())
@@ -55,8 +58,9 @@ export function LiveUpdatesProvider({
     async function onEvent(event: ServerEvent) {
       switch (event.type) {
         case 'lead.created': {
-          await queryClient.invalidateQueries({ queryKey: leadKeys.list() })
-          const leads = queryClient.getQueryData<z.output<typeof LeadListResponse>>(leadKeys.list())
+          // New leads are waiting, and the waiting list is small: refetch it whole.
+          await queryClient.invalidateQueries({ queryKey: leadKeys.awaiting() })
+          const leads = queryClient.getQueryData<z.output<typeof LeadListResponse>>(leadKeys.awaiting())
           const lead = leads?.leads.find((l) => l.id === event.leadId)
           if (!lead) return // the refetch failed; the inbox shows its own error
           markFresh(lead.id)
@@ -69,18 +73,12 @@ export function LiveUpdatesProvider({
           )
           // Our own activity is already in the cache from the mutation's response.
           if (detail?.activities.some((a) => a.id === event.activityId)) return
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: leadKeys.detail(event.leadId) }),
-            queryClient.invalidateQueries({ queryKey: leadKeys.list() }),
-          ])
+          await refreshLead(queryClient, api, event.leadId)
           return
         }
         case 'lead.updated': {
-          // A claim or release (AC-8.6). Our own is already cached; the refetch is cheap and correct.
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: leadKeys.detail(event.leadId) }),
-            queryClient.invalidateQueries({ queryKey: leadKeys.list() }),
-          ])
+          // A claim or release (AC-8.6). Our own is already cached; one lead's refetch is cheap and correct.
+          await refreshLead(queryClient, api, event.leadId)
           return
         }
         default:
@@ -102,7 +100,12 @@ export function LiveUpdatesProvider({
         setStatus(next)
       },
       onResume: () => {
-        // No event replay: refetch everything cached so nothing missed stays missing (AC-5.3).
+        // No event replay: refetch everything cached so nothing missed stays missing (AC-5.3). Missed
+        // events could have moved any loaded row, so the contacted list restarts from its first page
+        // rather than refetching every page loaded (AC-5.4).
+        queryClient.setQueryData<ContactedPages>(leadKeys.contacted(), (old) =>
+          old && { pages: old.pages.slice(0, 1), pageParams: old.pageParams.slice(0, 1) },
+        )
         void queryClient.invalidateQueries({ queryKey: leadKeys.all })
         announce('Live updates resumed.')
       },
@@ -111,7 +114,7 @@ export function LiveUpdatesProvider({
       unsubscribe()
       freshTimers.forEach(clearTimeout)
     }
-  }, [queryClient, announce, createSource])
+  }, [queryClient, api, announce, createSource])
 
   return <LiveContext value={{ status, fresh }}>{children}</LiveContext>
 }

@@ -6,12 +6,15 @@ import {
   ApiErrorResponse,
   CreateLeadResponse,
   DevFaults,
+  DevScaleResponse,
   DevTracing,
   DropStreamsResponse,
   CreateActivityResponse,
   LeadDetailResponse,
   type LeadId,
   LeadListResponse,
+  LeadPageResponse,
+  ResponseStats,
   LeadResponse,
   type NewActivity,
   type UserId,
@@ -113,7 +116,16 @@ export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false
 
   return {
     listUsers: (signal?: AbortSignal) => request('/users', UserListResponse, { signal }),
-    listLeads: (signal?: AbortSignal) => request('/leads', LeadListResponse, { signal }),
+    /** Every lead awaiting response, longest-waiting first (ADR-006). */
+    listAwaiting: (signal?: AbortSignal) => request('/leads?group=awaiting', LeadListResponse, { signal }),
+    /** One page of contacted leads, newest first; pass the previous page's `nextCursor`. */
+    listContacted: (cursor: string | null, signal?: AbortSignal) =>
+      request(
+        `/leads?group=contacted${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`,
+        LeadPageResponse,
+        { signal },
+      ),
+    getStats: (signal?: AbortSignal) => request('/stats', ResponseStats, { signal }),
     getLead: (id: LeadId, signal?: AbortSignal) =>
       request(`/leads/${id}`, LeadDetailResponse, { signal }),
     createActivity: (leadId: LeadId, activity: NewActivity, userId: UserId) =>
@@ -134,6 +146,7 @@ export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false
       ? {
           simulateLead: () => request('/dev/leads', CreateLeadResponse, { method: 'POST' }),
           reset: () => request('/dev/reset', LeadListResponse, { method: 'POST' }),
+          scale: () => request('/dev/scale', DevScaleResponse, { method: 'POST' }),
           dropStreams: () => request('/dev/drop-streams', DropStreamsResponse, { method: 'POST' }),
           getFaults: () => request('/dev/faults', DevFaults),
           setFaults: (faults: DevFaults) => request('/dev/faults', DevFaults, { method: 'PUT', body: faults }),

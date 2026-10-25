@@ -14,8 +14,9 @@ AI_LOG).
 | AC-1.3 | While loading, a skeleton list shows; no layout shift when data arrives. | integration (skeleton), e2e (layout shift) |
 | AC-1.4 | If loading fails, an error message and a **Retry** button show; Retry refetches. | integration |
 | AC-1.5 | With no leads, an empty state says so. | integration |
-| AC-1.6 | The inbox header shows three figures: leads waiting now (with how many are overdue), the share of leads answered within the 15-minute target over the last 24 hours, and the median first-response time over the last 24 hours. With nothing to measure, a figure shows a dash. | unit, integration |
+| AC-1.6 | The inbox header shows three figures: leads waiting now (with how many are overdue), the share of leads answered within the 15-minute target over the last 24 hours, and the median first-response time over the last 24 hours. With nothing to measure, a figure shows a dash. The 24-hour figures are computed by the server over every lead, not just the leads loaded. | unit, integration |
 | AC-1.7 | Each waiting lead shows a bar filling toward the 15-minute target, coloured by its SLA state. A contacted lead that missed the target shows its response time in the warning colour, with the word "late". | integration |
+| AC-1.8 | Every lead awaiting response loads at once. Contacted leads load 50 at a time: scrolling near the end of the list loads the next page, and a **Load more** button does the same by keyboard (`j` reaches it; after loading, focus moves to the first new lead). The group heading shows the total, not the number loaded. A failed page shows an error and Retry in place, keeping the leads already loaded. | unit (server), integration |
 
 ## 2. Speed-to-lead
 
@@ -60,6 +61,7 @@ AI_LOG).
 | AC-5.1 | A new lead posted to the server appears in an open inbox within 2 seconds, without a reload, and is announced to screen readers. | e2e |
 | AC-5.2 | An activity logged in one browser tab appears in another tab showing the same lead. | manual |
 | AC-5.3 | If the live connection drops, the UI says so, reconnects on its own, and refetches to catch anything missed. | integration |
+| AC-5.4 | A live change to a lead updates its row in place: it moves between groups as needed, and contacted pages already loaded are not refetched. A lead that sorts below the loaded pages appears when its page loads. After a reconnect, the contacted list restarts from its first page. | integration |
 
 ## 6. Keyboard and accessibility
 

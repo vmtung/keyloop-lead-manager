@@ -39,7 +39,7 @@ describe('successful requests', () => {
   test('parses a valid response', async () => {
     const api = apiWith(async () => json({ leads: [lead] }))
     // A lead without `claim` (data from before claims) parses with `claim: null`.
-    expect(await api.listLeads()).toEqual({ leads: [{ ...lead, claim: null }] })
+    expect(await api.listAwaiting()).toEqual({ leads: [{ ...lead, claim: null }] })
   })
 
   test('sends a request ID, and the user ID on writes', async () => {
@@ -77,14 +77,14 @@ describe('failures become typed ApiErrors', () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const api = apiWith(async () => json({ leads: [{ ...lead, receivedAt: 'yesterday' }] }))
 
-    expect(await failureOf(api.listLeads())).toMatchObject({ kind: 'invalid_response' })
+    expect(await failureOf(api.listAwaiting())).toMatchObject({ kind: 'invalid_response' })
     expect(logged).toHaveBeenCalledOnce()
   })
 
   test('a body that is not JSON is invalid_response', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const api = apiWith(async () => new Response('<html>Bad gateway</html>', { status: 200 }))
-    expect(await failureOf(api.listLeads())).toMatchObject({ kind: 'invalid_response' })
+    expect(await failureOf(api.listAwaiting())).toMatchObject({ kind: 'invalid_response' })
   })
 
   test('an error response keeps its status and code', async () => {
@@ -101,7 +101,7 @@ describe('failures become typed ApiErrors', () => {
   test('an error response without a contract body still reports its status', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const api = apiWith(async () => new Response('Service Unavailable', { status: 503 }))
-    expect(await failureOf(api.listLeads())).toMatchObject({ kind: 'http', status: 503, code: null })
+    expect(await failureOf(api.listAwaiting())).toMatchObject({ kind: 'http', status: 503, code: null })
   })
 
   test('a fetch that throws (offline) is a network failure', async () => {
@@ -109,7 +109,7 @@ describe('failures become typed ApiErrors', () => {
     const api = apiWith(async () => {
       throw new TypeError('Failed to fetch')
     })
-    expect(await failureOf(api.listLeads())).toEqual({ kind: 'network' })
+    expect(await failureOf(api.listAwaiting())).toEqual({ kind: 'network' })
     await new Promise((r) => setTimeout(r, 10))
     expect(console.error).toHaveBeenCalledOnce() // still logged when the page stays
   })
@@ -121,7 +121,7 @@ describe('failures become typed ApiErrors', () => {
         init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
       })
     const api = apiWith(neverAnswers, 20)
-    expect(await failureOf(api.listLeads())).toEqual({ kind: 'timeout' })
+    expect(await failureOf(api.listAwaiting())).toEqual({ kind: 'timeout' })
   })
 
   test('requests cut off by the page unloading are not logged (the abort lands before pagehide)', async () => {
@@ -134,7 +134,7 @@ describe('failures become typed ApiErrors', () => {
       10_000,
       () => unloading,
     )
-    expect(await failureOf(api.listLeads())).toEqual({ kind: 'network' })
+    expect(await failureOf(api.listAwaiting())).toEqual({ kind: 'network' })
     unloading = true // pagehide fires after the rejection
     await new Promise((r) => setTimeout(r, 10))
     expect(logged).not.toHaveBeenCalled()
@@ -147,7 +147,7 @@ describe('failures become typed ApiErrors', () => {
         init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
       })
     const controller = new AbortController()
-    const pending = apiWith(neverAnswers).listLeads(controller.signal)
+    const pending = apiWith(neverAnswers).listAwaiting(controller.signal)
     controller.abort()
 
     await expect(pending).rejects.toHaveProperty('name', 'AbortError')

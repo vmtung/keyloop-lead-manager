@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest'
 import type { Activity, ActivityType, IsoDateTime, Lead } from '../contract.ts'
-import { firstResponseAt, isContactAttempt, sortForInbox, speedToLead } from './speedToLead.ts'
+import { firstResponseAt, isContactAttempt, newestFirst, sortForInbox, speedToLead } from './speedToLead.ts'
 
 const RECEIVED = '2026-10-22T09:00:00.000Z'
 const minutes = (n: number) => n * 60_000
@@ -112,6 +112,14 @@ describe('AC-1.2: inbox order', () => {
     const sorted = sortForInbox([newContacted, newWaiting, oldContacted, oldWaiting])
 
     expect(sorted).toEqual([oldWaiting, newWaiting, newContacted, oldContacted])
+  })
+
+  test('AC-1.8: contacted leads received at the same moment keep a stable order, by ID', () => {
+    const a = lead({ id: '00000000-0000-4000-8000-00000000000a' as Lead['id'], receivedAt: iso(0), firstResponseAt: iso(5) })
+    const b = lead({ id: '00000000-0000-4000-8000-00000000000b' as Lead['id'], receivedAt: iso(0), firstResponseAt: iso(5) })
+    expect(sortForInbox([a, b])).toEqual([b, a])
+    expect(sortForInbox([b, a])).toEqual([b, a])
+    expect(newestFirst(b, a)).toBeLessThan(0)
   })
 
   test('does not mutate its input', () => {

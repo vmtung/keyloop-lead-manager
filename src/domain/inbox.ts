@@ -1,37 +1,32 @@
 // Figures for the inbox header (AC-1.6) and the lead to call next (AC-3.7). Pure: the caller passes `now`.
-import type { Lead } from '../contract.ts'
+import type { Lead, ResponseStats } from '../contract.ts'
 import { SLA, speedToLead } from './speedToLead.ts'
 
 const WINDOW_MS = 24 * 60 * 60_000
 
-export interface InboxStats {
-  waiting: number
-  overdue: number
-  /** Leads first answered in the last 24 hours. */
-  answered: number
-  /** Share of those answered within the target; null when there were none. */
-  withinTargetShare: number | null
-  medianResponseMs: number | null
-}
-
-export function inboxStats(leads: readonly Lead[], now: number): InboxStats {
+/** Who is waiting now, from the awaiting leads the browser holds, so it ticks without refetching. */
+export function waitingStats(leads: readonly Lead[], now: number): { waiting: number; overdue: number } {
   let waiting = 0
   let overdue = 0
-  const responses: number[] = []
-
   for (const lead of leads) {
     const s = speedToLead(lead, now)
-    if (s.status === 'awaiting_response') {
-      waiting += 1
-      if (s.sla === 'overdue') overdue += 1
-    } else if (lead.firstResponseAt && now - Date.parse(lead.firstResponseAt) <= WINDOW_MS) {
+    if (s.status !== 'awaiting_response') continue
+    waiting += 1
+    if (s.sla === 'overdue') overdue += 1
+  }
+  return { waiting, overdue }
+}
+
+/** How fast leads were answered over the last 24 hours. The server runs it over every lead (ADR-006). */
+export function responseStats(leads: readonly Lead[], now: number): ResponseStats {
+  const responses: number[] = []
+  for (const lead of leads) {
+    const s = speedToLead(lead, now)
+    if (s.status === 'contacted' && now - Date.parse(lead.firstResponseAt!) <= WINDOW_MS) {
       responses.push(s.responseMs)
     }
   }
-
   return {
-    waiting,
-    overdue,
     answered: responses.length,
     withinTargetShare:
       responses.length === 0 ? null : responses.filter((ms) => ms <= SLA.targetMs).length / responses.length,

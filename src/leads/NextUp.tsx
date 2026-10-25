@@ -6,7 +6,7 @@ import { nextUp } from '../domain/inbox.ts'
 import { sortForInbox } from '../domain/speedToLead.ts'
 import { ENQUIRY_LABEL } from '../domain/labels.ts'
 import { Avatar } from './Avatar.tsx'
-import { useLeads } from './queries.ts'
+import { useAwaitingLeads } from './queries.ts'
 import { SpeedToLeadMeter, SpeedToLeadPill } from './SpeedToLeadStatus.tsx'
 
 /**
@@ -14,7 +14,7 @@ import { SpeedToLeadMeter, SpeedToLeadPill } from './SpeedToLeadStatus.tsx'
  * the longest-waiting unclaimed one, so the most urgent job is one click away.
  */
 export function NextUp() {
-  const leads = useLeads()
+  const leads = useAwaitingLeads()
   const now = useNow()
   if (!leads.data) return <section className="detail detail--empty" aria-label="Next up" />
 
