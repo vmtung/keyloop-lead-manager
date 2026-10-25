@@ -11,7 +11,6 @@ import {
   CreateActivityResponse,
   CreateLeadResponse,
   DevFaults,
-  DevScaleResponse,
   DevTracing,
   DropStreamsResponse,
   type IsoDateTime,
@@ -34,10 +33,9 @@ import { newestFirst } from '../src/domain/speedToLead.ts'
 import { teamStats } from '../src/domain/team.ts'
 import { suggestNextAction } from '../src/domain/suggest.ts'
 import { decodeCursor, pageContacted } from './paging.ts'
-import { scale } from './scale.ts'
 import { LEAD_SAMPLES } from './samples.ts'
 import { seed } from './seed.ts'
-import { appendActivity, claimLead, createLead, releaseLead, type Store } from './store.ts'
+import { appendActivity, claimLead, createLead, type Data, releaseLead, type Store } from './store.ts'
 import type { TracingSwitch } from './tracing.ts'
 
 export type Faults = DevFaults
@@ -52,6 +50,8 @@ export interface AppDeps {
   random?: () => number
   newId?: () => string
   keepAliveMs?: number
+  /** What reset restores; the sample data unless given (the running server adds a month of history). */
+  seed?: (now: Date) => Data
   /** Absent in tests that don't need it: tracing then stays off. */
   tracing?: TracingSwitch
 }
@@ -220,18 +220,10 @@ export function createApp(deps: AppDeps) {
 
   app.post('/dev/reset', async (c) => {
     const data = await update(() => {
-      const fresh = seed(now())
+      const fresh = (deps.seed ?? seed)(now())
       return { data: fresh, value: fresh }
     })
     return c.json(send(LeadListResponse, { leads: data.leads }))
-  })
-
-  app.post('/dev/scale', async (c) => {
-    const data = await update(() => {
-      const scaled = scale(seed(now()), now())
-      return { data: scaled, value: scaled }
-    })
-    return c.json(send(DevScaleResponse, { total: data.leads.length }))
   })
 
   app.post('/dev/drop-streams', (c) => {

@@ -6,7 +6,6 @@ import {
   ApiErrorResponse,
   CreateLeadResponse,
   DevFaults,
-  DevScaleResponse,
   DevTracing,
   DropStreamsResponse,
   CreateActivityResponse,
@@ -148,7 +147,6 @@ export function createApi({ fetch, baseUrl, timeoutMs, isUnloading = () => false
       ? {
           simulateLead: () => request('/dev/leads', CreateLeadResponse, { method: 'POST' }),
           reset: () => request('/dev/reset', LeadListResponse, { method: 'POST' }),
-          scale: () => request('/dev/scale', DevScaleResponse, { method: 'POST' }),
           dropStreams: () => request('/dev/drop-streams', DropStreamsResponse, { method: 'POST' }),
           getFaults: () => request('/dev/faults', DevFaults),
           setFaults: (faults: DevFaults) => request('/dev/faults', DevFaults, { method: 'PUT', body: faults }),

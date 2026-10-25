@@ -99,9 +99,8 @@ fault injection, so a flaky API can always be switched back to normal.
 | `GET /dev/faults` | | 200 `DevFaults`: the current latency and failure rate |
 | `PUT /dev/faults` | `DevFaults` | 200 `DevFaults`; 400 `validation_failed` |
 | `POST /dev/leads` | | 201 `CreateLeadResponse`: a sample website enquiry, announced as `lead.created` |
-| `POST /dev/reset` | | 200 `LeadListResponse`: the sample data again, with fresh timers |
+| `POST /dev/reset` | | 200 `LeadListResponse`: the starting data again (the sample leads and a month of history, A16), with fresh timers |
 | `POST /dev/drop-streams` | | 200 `DropStreamsResponse`: closes every live event stream, so clients reconnect |
-| `POST /dev/scale` | | 200 `DevScaleResponse`: the sample data plus 5,000 contacted leads over the last 30 days, and how many leads there are now. Reset puts the sample data back |
 | `GET /dev/tracing` | | 200 `DevTracing`: whether the server is sending traces to Jaeger |
 | `PUT /dev/tracing` | `DevTracing` | 200 `DevTracing`; 400 `validation_failed`; 503 `internal` when switching on and Jaeger can't be reached |
 

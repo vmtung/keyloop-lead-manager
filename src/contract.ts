@@ -178,5 +178,3 @@ export const DropStreamsResponse = z.object({ dropped: z.int().nonnegative() })
 
 export const DevTracing = z.object({ enabled: z.boolean() })
 export type DevTracing = z.infer<typeof DevTracing>
-
-export const DevScaleResponse = z.object({ total: z.int().nonnegative() })

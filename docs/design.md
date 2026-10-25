@@ -310,8 +310,8 @@ Measured on the production build:
 ### At 5,000 leads
 
 The inbox pages (ADR-006): every waiting lead loads at once, contacted leads 50 at a time, newest
-first, with a keyset cursor, and the 24-hour figures come from the server. The demo tools' **Load
-5,000 leads** adds a month of contacted history. Measured against the mock with its injected latency
+first, with a keyset cursor, and the 24-hour figures come from the server. The mock starts with a month
+of history: 5,000 contacted leads with their follow-ups, beside the sample leads (A16). Measured against the mock with its injected latency
 off:
 
 | | Before paging | Now |

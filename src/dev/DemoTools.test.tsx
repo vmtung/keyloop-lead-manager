@@ -71,8 +71,8 @@ describe('demo tools', () => {
     const { panel, store } = await openTools()
     await userEvent.click(within(panel).getByRole('button', { name: /New website lead/ }))
     await waitFor(() => expect(store.read().leads).toHaveLength(9))
-    await userEvent.click(within(panel).getByRole('button', { name: /Reset sample data/ }))
-    await waitFor(() => expect(result()).toHaveTextContent('Sample data reset, with fresh timers.'))
+    await userEvent.click(within(panel).getByRole('button', { name: /Reset data/ }))
+    await waitFor(() => expect(result()).toHaveTextContent('Data reset, with fresh timers.'))
     expect(store.read().leads).toHaveLength(8)
   })
 

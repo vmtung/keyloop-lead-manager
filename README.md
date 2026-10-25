@@ -23,7 +23,7 @@ salesperson can log a new follow-up from the same screen.
 - **Team view.** Speed to lead per salesperson over the last day, credited to whoever made first
   contact, with the waiting leads each person has claimed.
 - **Dealership-sized.** Waiting leads load in full; contacted ones load 50 at a time as you scroll.
-  The demo tools can load 5,000 leads to show it.
+  The mock starts with a month of history, 5,000 leads, to show it.
 - **Keyboard and screen reader.** `j` and `k` move through leads, `c` jumps to the composer, and
   status changes are announced.
 
@@ -57,7 +57,7 @@ The app is at http://localhost:5173, and the mock API on port 8787. Both start t
 
 In development, the cog in the bottom-right corner opens **Demo tools**: simulate a new website
 lead, have a teammate call or claim the next lead, drop the live connection, switch the API between
-normal, slow and flaky, load 5,000 leads, or reset the sample data. Production builds leave it out. The same things
+normal, slow and flaky, or reset the data. Production builds leave it out. The same things
 work from the command line:
 
 ```bash

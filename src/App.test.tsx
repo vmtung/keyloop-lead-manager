@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, test } from 'vitest'
 import { claimLead } from '../server/store.ts'
 import type { IsoDateTime, LeadId, UserId } from './contract.ts'
-import { scale } from '../server/scale.ts'
+import { withHistory } from '../server/history.ts'
 import { LEADS, renderApp } from './test/renderApp.tsx'
 
 
@@ -446,7 +446,7 @@ describe('a dealership-sized inbox (ADR-006)', () => {
   const isPage = (url: string) => url.includes('group=contacted') && url.includes('cursor=')
 
   async function renderScaled() {
-    const utils = await renderApp({ data: (d) => scale(d, new Date()) })
+    const utils = await renderApp({ data: (d) => withHistory(d, new Date()) })
     await waitFor(() => expect(contactedRows()).toHaveLength(50))
     return utils
   }

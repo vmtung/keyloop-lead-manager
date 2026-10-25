@@ -2,7 +2,7 @@
 import { serve } from '@hono/node-server'
 import { createApp } from './app.ts'
 import { parseFaults } from './config.ts'
-import { seed } from './seed.ts'
+import { seedWithHistory } from './history.ts'
 import { openStore } from './store.ts'
 import { createTracingSwitch } from './tracing.ts'
 
@@ -18,8 +18,9 @@ const log = (entry: Record<string, unknown>) => {
 // Off until the demo tools switch it on (AC-7.7).
 const tracing = createTracingSwitch(process.env.OTEL_EXPORTER_URL ?? 'http://localhost:4318/v1/traces')
 
-const store = await openStore(file, () => seed())
-const app = createApp({ store, faults, log, tracing })
+// The sample leads plus a month of history, on first start and on reset (specs A16).
+const store = await openStore(file, () => seedWithHistory())
+const app = createApp({ store, faults, log, tracing, seed: seedWithHistory })
 
 serve({ fetch: app.fetch, port }, () => {
   log({ level: 'info', message: `Mock API on http://localhost:${port}/api`, file, faults })

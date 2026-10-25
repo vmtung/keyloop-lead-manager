@@ -362,3 +362,14 @@ Primary tool: Claude Code (Claude Opus) in the Claude desktop app.
   checking the seed.
 - **Verified by breaking the code:** crediting the claimer instead of the first responder, and not
   refreshing the team figures on a live change. Each failed its test.
+
+## 19. A month of history by default
+
+- **Ask:** Seed the data to its full potential, and stop cleaning the leads up.
+- **AI output:** the mock now starts with, and resets to, the sample leads plus a month of history:
+  5,000 contacted leads with varied messages, registrations, a first contact each and up to three
+  follow-ups (calls, emails, texts, notes, appointments), some by a teammate. The separate "Load
+  5,000 leads" action and its endpoint went, since the default now does that job. Tests keep the
+  small sample data unless a test asks for the history; the end-to-end tests run on the full data.
+- **Caught while writing the test:** the slowest generated first contact could land a minute in the
+  future. History now starts three hours back, and a test checks no activity is after now.

@@ -1,7 +1,7 @@
 // Demo tools: trigger the mock's simulations from the app instead of the command line. Development
 // builds only (main.tsx loads it behind import.meta.env.DEV), so production never ships it.
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Database, ExternalLink, Hand, Phone, RotateCcw, Settings, Unplug, UserPlus } from 'lucide-react'
+import { ExternalLink, Hand, Phone, RotateCcw, Settings, Unplug, UserPlus } from 'lucide-react'
 import { type KeyboardEvent, useEffect, useRef, useState } from 'react'
 import { ApiError } from '../api/client.ts'
 import { describeFailure } from '../api/describeFailure.ts'
@@ -169,17 +169,9 @@ export default function DemoTools() {
               await api.dev.reset()
               // Reset, not invalidate: the contacted list starts again from its first page.
               await queryClient.resetQueries({ queryKey: leadKeys.all })
-              return 'Sample data reset, with fresh timers.'
+              return 'Data reset, with fresh timers.'
             })}>
-            <RotateCcw aria-hidden size={16} /> Reset sample data
-          </button>
-          <button type="button" className="demo__action" disabled={busy !== null}
-            onClick={() => run('Load 5,000 leads', async () => {
-              const { total } = await api.dev.scale()
-              await queryClient.resetQueries({ queryKey: leadKeys.all })
-              return `${total.toLocaleString('en-GB')} leads loaded. Scroll the contacted list to page through them.`
-            })}>
-            <Database aria-hidden size={16} /> Load 5,000 leads
+            <RotateCcw aria-hidden size={16} /> Reset data
           </button>
 
           {result && <p className="demo__result" role="status">{result}</p>}

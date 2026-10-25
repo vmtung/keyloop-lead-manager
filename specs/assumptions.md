@@ -55,7 +55,10 @@ The brief leaves these open. Each is a decision we can defend, and each names wh
 
 - **A16. A small Node server stands in for the backend** and stores data in a JSON file, so
   activities survive a reload and a restart. It can add latency and random failures through env
-  vars, so the error paths are real (see ADR-003).
+  vars, so the error paths are real (see ADR-003). It starts with eight sample leads, three of them
+  waiting, plus a month of history: 5,000 contacted leads with their first contacts and follow-ups,
+  so the inbox, the figures and the team view look like a real dealership. Reset in the demo tools
+  restores the same data with fresh timers; `pnpm reset-data` deletes the file to reseed on start.
 - **A17. Website form submissions** arrive as `POST /api/leads`. A script (`pnpm simulate:lead`)
   calls it to demo a lead arriving live.
 

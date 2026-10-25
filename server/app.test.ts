@@ -8,7 +8,6 @@ import {
   CreateActivityResponse,
   CreateLeadResponse,
   DevFaults,
-  DevScaleResponse,
   DevTracing,
   DropStreamsResponse,
   LeadResponse,
@@ -23,6 +22,7 @@ import { createApp, type Faults } from './app.ts'
 import { parseFaults } from './config.ts'
 import { seed } from './seed.ts'
 import { openStore } from './store.ts'
+import { seedWithHistory } from './history.ts'
 import { newestFirst } from '../src/domain/speedToLead.ts'
 import { responseStats } from '../src/domain/inbox.ts'
 import { teamStats } from '../src/domain/team.ts'
@@ -584,20 +584,21 @@ describe('dev endpoints (demo tools)', () => {
     expect((await app.request('/api/dev/tracing', json('PUT', { enabled: 'yes' }))).status).toBe(400)
   })
 
-  test('AC-1.8: scale loads 5,000 contacted leads beside the sample data, and reset takes them away', async () => {
-    const { app, store } = await setup()
-    const res = await app.request('/api/dev/scale', json('POST'))
-    const { total } = DevScaleResponse.parse(await res.json())
-    expect(total).toBe(seed(NOW).leads.length + 5000)
+  test('AC-1.8: the running server seeds a month of history, and reset restores it', async () => {
+    const store = await openStore(file, () => seedWithHistory(NOW))
+    const app = createApp({ store, faults: NO_FAULTS, log: () => {}, now: () => NOW, seed: seedWithHistory })
+    const total = seed(NOW).leads.length + 5000
     expect(store.read().leads).toHaveLength(total)
-
     const page = LeadPageResponse.parse(await (await app.request('/api/leads?group=contacted')).json())
     expect(page.leads).toHaveLength(50)
     expect(page.total).toBe(total - 3) // the three sample leads still waiting
-    const awaiting = LeadListResponse.parse(await (await app.request('/api/leads?group=awaiting')).json())
-    expect(awaiting.leads).toHaveLength(3)
 
+    await app.request('/api/dev/leads', json('POST'))
     await app.request('/api/dev/reset', json('POST'))
-    expect(store.read().leads).toHaveLength(seed(NOW).leads.length)
+    expect(store.read().leads).toHaveLength(total)
+    // Every history lead was contacted first, and nothing happens after now.
+    const history = store.read().activities.filter((a) => a.id.startsWith('00000000-0000-4000-8000-00000100'))
+    expect(history.length).toBeGreaterThan(5000)
+    expect(history.every((a) => Date.parse(a.occurredAt) <= NOW.getTime())).toBe(true)
   })
 })
