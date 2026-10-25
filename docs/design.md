@@ -10,12 +10,26 @@ inbox order, the timers on each lead, and the overdue flags.
 Requirements and decisions live in the repository, and this document links to them rather than
 repeating them:
 
-- [`specs/assumptions.md`](../specs/assumptions.md): 17 assumptions where the brief was open
+- [`specs/assumptions.md`](../specs/assumptions.md): 21 assumptions where the brief was open
 - [`specs/acceptance-criteria.md`](../specs/acceptance-criteria.md): 61 criteria with IDs that tests cite
 - [`specs/api-contract.md`](../specs/api-contract.md) and [`src/contract.ts`](../src/contract.ts): the API
 - [`docs/adr/`](adr/): seven architecture decision records
 
 ## 1. Context
+
+### Scope: what the brief asked for, and what we added
+
+| | What |
+|---|---|
+| **The brief's three requirements** | A lead inbox; a lead's details with a chronological log of follow-ups; logging a follow-up that is saved |
+| **The brief's "build for the future"**, our way of meeting it | Saves that survive weak signal without duplicates (ADR-004), structured logs and tracing (section 7), paging at 5,000 leads (ADR-006), a shared contract, ADRs and CI |
+| **Our additions** | Speed to lead as the organising idea (timers, overdue flags, figures, Next up), live updates, claiming, a rules-based stand-in for AIME, a team view, notifications, a month of history, development-only demo tools |
+| **Cut** | An offline queue and presence (section 11) |
+
+The three requirements were built and tested first. Every addition had to help a salesperson answer
+a customer faster; the ones that didn't make the cut are in future work.
+
+### Where it fits
 
 Keyloop's Fusion platform has four domains; this tool belongs to Demand. Two things on Keyloop's
 roadmap shaped it:
@@ -37,7 +51,7 @@ as the happy path.
 ```mermaid
 flowchart LR
   subgraph Browser["Browser: React app"]
-    UI["Inbox, lead detail,<br/>composer"]
+    UI["Inbox, lead detail, composer,<br/>team view, notifications"]
     Q["TanStack Query cache"]
     API["API client<br/>(parses every response)"]
     EV["Event subscriber<br/>(watchdog, backoff)"]
@@ -47,7 +61,7 @@ flowchart LR
   end
 
   subgraph Mock["Mock API: Hono on Node"]
-    REST["REST routes"]
+    REST["REST routes<br/>(leads, stats, notifications)"]
     SSE["SSE hub"]
     INTAKE["Log intake"]
     FAULT["Latency and failure injection"]
@@ -76,10 +90,10 @@ proxy matters: two of the live-update bugs lived in it (section 6).
 | API client | `src/api/client.ts` | The only code that talks to the backend. Adds a request ID, times out after 10 s, and turns every failure into one typed `ApiError` (network, timeout, HTTP, invalid response). |
 | Event subscriber | `src/api/events.ts` | Owns the `EventSource`: parses events against the contract, reconnects with backoff, and treats 35 s of silence as a dropped connection. |
 | Server state | `src/leads/queries.ts` | TanStack Query hooks. Logging an activity is a mutation whose pending and failed states live in the mutation cache, so they outlive any one screen. |
-| Live updates | `src/leads/live.tsx` | Turns each event into cache invalidations, a screen-reader announcement and a brief highlight on new leads. |
+| Live updates | `src/leads/live.tsx` | Turns each event into a refetch of what changed: the waiting list for a new lead, otherwise the one lead it names, placed in the loaded pages (ADR-006). Also the screen-reader announcement, a brief highlight, the pop-up and the unread count. |
 | Screens | `src/leads/*.tsx`, `src/App.tsx` | Inbox with its speed-to-lead figures and a clock bar per waiting lead; "Next up" when no lead is open; lead detail with the wait as its headline and Call as its primary action; claim line, activity timeline, composer. Two-pane on desktop, one pane at a time on a phone. A team view (`src/team/`) shows the same figures per salesperson. Notifications (`src/notifications/`): the bell, its list, pop-ups and the chime. |
 | Observability | `src/observability/`, `src/app/ErrorBoundary.tsx` | Structured logs with session and user, Web Vitals, error boundaries, global error handlers, log shipping. |
-| Mock API | `server/` | REST, SSE, log intake, idempotent writes, conditional claims, fault injection, JSON-file persistence. |
+| Mock API | `server/` | REST, SSE, log intake, idempotent writes, conditional claims, keyset paging, the 24-hour and team figures, notifications, fault injection, JSON-file persistence, and a month of seeded history. |
 | Demo tools | `src/dev/` | Development builds only: a panel that triggers the mock's simulations (new lead, a teammate's call or claim, a dropped connection, API mode, reset) through dev endpoints. Vite drops it and the client's dev methods from production builds. |
 
 ## 3. Data model
@@ -88,6 +102,9 @@ proxy matters: two of the live-update bugs lived in it (section 6).
 erDiagram
   LEAD ||--o{ ACTIVITY : has
   USER ||--o{ ACTIVITY : authors
+  LEAD ||--o{ NOTIFICATION : causes
+  USER ||--o{ NOTIFICATION : "receives (or everyone)"
+
   LEAD {
     uuid id
     object customer "name, email, phone"
@@ -104,6 +121,12 @@ erDiagram
     string summary "1 to 2000 characters"
     datetime occurredAt "set by the server"
   }
+  NOTIFICATION {
+    string id "lead:<id> or activity:<id>"
+    enum kind "new_lead, teammate_activity"
+    datetime at
+    string for "a user, or everyone"
+  }
 ```
 
 Status is derived, not stored (assumption A6). A lead is "awaiting response" until its first
@@ -112,6 +135,9 @@ email, SMS or appointment counts as a contact attempt, an unanswered call includ
 The server sets `firstResponseAt` from the log with the same function the client uses.
 
 Activities are append-only, which keeps the log an audit trail.
+
+Notifications (A21, ADR-007) are written in the same store write as the lead or activity that
+causes them. Each salesperson has one "read up to" time, so marking everything read is one write.
 
 A lead can be claimed by one salesperson (assumption A18). The first contact attempt on an
 unclaimed lead claims it for its author, so someone who just calls never has to click Claim.
@@ -218,7 +244,7 @@ itself only conflicts with another claim. In a database it is one statement,
 | Server-sent events | One-way server push is all the product needs; reconnection is built into `EventSource`; plain HTTP through proxies. WebSocket would only pay off for presence, which was cut. | WebSocket, polling |
 | Hono mock server, JSON file | Persists across restarts, pushes events to other tabs, and fails or slows down on demand, so error paths are real. Node 24 runs its TypeScript directly. | MSW, json-server, static JSON |
 | Plain CSS with tokens | No dependency, readable markup. | Tailwind |
-| Vitest, Testing Library, Playwright | Vitest shares Vite's config. Testing Library tests what a user sees. One Playwright path covers what jsdom cannot. | Jest |
+| Vitest, Testing Library, Playwright | Vitest shares Vite's config. Testing Library tests what a user sees. Two Playwright tests cover what jsdom cannot. | Jest |
 | `web-vitals`, `lucide-react`, self-hosted Geist | Each chosen after listing the alternative: hand-rolled INP, hand-drawn icons, Google Fonts (an external request on every load). | |
 
 Every dependency was proposed with its alternative before it was added, and its version and Node
@@ -324,7 +350,7 @@ off:
 | First load | One 2.4 MB response (about 470 bytes a lead) | Waiting leads 1.4 KB, one page 23.6 KB, figures 80 bytes |
 | A live event | Refetch of the whole list | One lead, placed in the loaded pages |
 | A page, server side | n/a | About 25 ms: the mock sorts all 5,005 contacted leads per request. An index makes it constant. |
-| Saving a follow-up | 14 ms, including rewriting the 5.1 MB JSON file | The same; a database removes the rewrite |
+| Saving a follow-up | 14 ms, including rewriting the 5.1 MB JSON file | 30 to 40 ms now notifications bring the file to 9 MB; a database removes the rewrite |
 
 In Chrome, with all 5,005 rows loaded by scrolling: 43,000 DOM nodes and a 142 MB JS heap. Rows use
 `content-visibility: auto`, so the browser skips laying out the ones off screen. Layout after
@@ -388,7 +414,9 @@ Cut to finish a smaller scope properly, in rough order of value:
 4. **Presence** ("Anna is viewing"). This is the feature that would justify moving from SSE to
    WebSocket.
 5. **Won or lost outcomes**, reassignment, search and filters.
-6. **OpenTelemetry 3.** The tracing uses the 2.12 SDK packages, pinned at least two weeks old. Three
+6. **A virtualised list** if salespeople really scroll through thousands of contacted leads
+   (ADR-006 has the measurements).
+7. **OpenTelemetry 3.** The tracing uses the 2.12 SDK packages, pinned at least two weeks old. Three
    days later, OpenTelemetry 3.0 merged them into `@opentelemetry/sdk-trace` and marked them
    deprecated. They still work; moving to 3.x is a small follow-up once it has settled.
 
@@ -426,7 +454,7 @@ specifically:
 
 - **Scope.** I asked for a MUST and NICE split before any code. The AI proposed cutting presence and
   the offline queue, and pointed out that without presence, SSE beats WebSocket. That became ADR-002.
-- **Assumptions.** The AI drafted the 17 assumptions and flagged five product calls for my review:
+- **Assumptions.** The AI drafted the first 17 assumptions (21 now) and flagged five product calls for my review:
   the 15-minute target, status derived from the log, an unanswered call counting as a response, a
   required summary, and the log reading oldest first. I approved them; they are the parts of the
   design I expect to be asked about, so they are written down with the reasoning.
